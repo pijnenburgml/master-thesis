@@ -1,8 +1,9 @@
-setwd("data")
+setwd("~/data")
 library(sf)
 library(tidyverse)
 library(dplyr)
 library(terra)
+library(tidyterra)
 # library(biodivMapR)
 
 ############################
@@ -52,9 +53,14 @@ lines(area_interest_proj, col="red")
 # writeRaster(sent_aoi_stack, filename="output/full_stack_view.tif")
 
 sent_aoi_stack <- rast("output/full_stack_view.tif")
+# mkdir ~/master-thesis/sent_output
+# writeRaster(sent_aoi_stack, filename = "~/master-thesis/sent_output/sent_aoi_stack.tif", overwrite=T)
 
 sent_aoi_stack_crop <- crop(sent_aoi_stack, area_interest_proj)
-writeRaster(sent_aoi_stack_crop, filename="output/sent_crop_view.tif")
+# writeRaster(sent_aoi_stack_crop, filename="output/sent_crop_view.tif")
+# writeRaster(sent_aoi_stack_crop, filename = "~/master-thesis/sent_output/sent_aoi_stack_crop.tif")
+
+sent_aoi_stack_crop <- rast("output/sent_crop_view.tif")
 
 plotRGB(sent_aoi_stack_crop, r=3, g=2, b=1, scale=10000, stretch="lin")
 # why do we have such a different color after cropping 
@@ -65,24 +71,48 @@ plot(area_interest_proj, add=T, col="red")
 #removal of water bodies
 
 names(sent_aoi_stack_crop)
-SWIR <- (sent_20_stack_int["T13WDS_20170811T185921_B11"]+sent_20_stack_int["T13WDS_20170811T185921_B12"])/2
-#NDWI <- (SWIR - sent_20_stack_int["T13WDS_20170811T185921_B08"])/(SWIR +sent_20_stack_int["T13WDS_20170811T185921_B08"])
+# SWIR <- (sent_aoi_stack_crop["T13WDS_20190727T185929_B11_20m"]+sent_aoi_stack_crop["T13WDS_20190727T185929_B12_20m"])/2
+# NDWI<- (SWIR - sent_aoi_stack_crop["T13WDS_20190727T185929_B08_10m"])/(SWIR +sent_aoi_stack_crop["T13WDS_20190727T185929_B08_10m"])
+# this version is used for leaf water content
 NDWI <- (sent_aoi_stack_crop["T13WDS_20190727T185929_B03_10m"] - sent_aoi_stack_crop["T13WDS_20190727T185929_B08_10m"])/(sent_aoi_stack_crop["T13WDS_20190727T185929_B03_10m"] +sent_aoi_stack_crop["T13WDS_20190727T185929_B08_10m"])
 plot(NDWI)
+# writeRaster(NDWI, filename = "~/master-thesis/sent_output/NDWI.tif")
 # some water pixel have actually value very close to 0, which is weird but also means that they are not filtered
 water_mask <- ifel(NDWI>=0.2, NA, 1)
-# writeRaster(water_mask, filename = "output/water_mask.tif", overwrite=TRUE)
-mask_test <- ifel(sent_aoi_stack_crop["T13WDS_20190727T185929_B03_10m"]==1 & sent_aoi_stack_crop["T13WDS_20190727T185929_B04_10m"]==1, NA, 1)
+# writeRaster(water_mask, filename = "~/master-thesis/sent_output/water_mask.tif", overwrite=TRUE)
+mask_test <- ifel(sent_aoi_stack_crop["T13WDS_20190727T185929_B03_10m"]==1 & sent_aoi_stack_crop["T13WDS_20190727T185929_B04_10m"]==1, 1, NA)
 plot(mask_test)
+mask_test_df <- as.data.frame(mask_test, xy=T)
+weird_pixel <- extract(sent_aoi_stack_crop, y=mask_test_df[,1:2])
+mask_test <- ifel(sent_aoi_stack_crop["T13WDS_20190727T185929_B03_10m"]==1 & sent_aoi_stack_crop["T13WDS_20190727T185929_B04_10m"]==1, NA, 1)
 sent_aoi_stack_crop_nowa <- mask(sent_aoi_stack_crop, mask=water_mask)
-plotRGB(sent_aoi_stack_crop_nowa, r=3, g=2, b=1
-        ,scale=10000, stretch="lin"
+sent_aoi_stack_crop_nowa_noweird <- mask(sent_aoi_stack_crop_nowa, mask=mask_test)
+plotRGB(sent_aoi_stack_crop_nowa_noweird, r=3, g=2, b=1
+        ,scale=10000
 )  
 #why so different now?
+# writeRaster(mask_test, filename = "~/master-thesis/sent_output/weird_pixel_mask.tif")
+
+
+########
+NDVI <- (sent_aoi_stack_crop["T13WDS_20190727T185929_B08_10m"]- sent_aoi_stack_crop["T13WDS_20190727T185929_B04_10m"])/(sent_aoi_stack_crop["T13WDS_20190727T185929_B08_10m"]+sent_aoi_stack_crop["T13WDS_20190727T185929_B04_10m"])
+plot(NDVI)
+NDVI_mask <- ifel(NDVI>-0.5, 1, NA)
+plot(NDVI_mask)
+# writeRaster(NDVI_mask, filename = "~/master-thesis/sent_output/NDVI_mask.tif")
+# The mask doesn't seems to add anything compared to the water + doens't remove the very white looking area like civilized.
+sent_aoi_stack_crop_nowa_NDVI <- mask(sent_aoi_stack_crop_nowa, NDVI_mask)
+ggplot()+
+  geom_spatraster_rgb(data=sent_aoi_stack_crop_nowa_NDVI, r=3, g=2, b=1)
 
 #removal of snowed pixel
 NDSI <- (sent_aoi_stack_crop_nowa["T13WDS_20190727T185929_B03_10m"] - sent_aoi_stack_crop_nowa["T13WDS_20190727T185929_B11_20m"])/(sent_aoi_stack_crop_nowa["T13WDS_20190727T185929_B03_10m"] + sent_aoi_stack_crop_nowa["T13WDS_20190727T185929_B11_20m"])
 plot(NDSI)
+snow_mask <- ifel(NDSI>=0.4, NA, 1)
+plot(snow_mask)
+writeRaster(snow_mask,filename = "~/master-thesis/sent_output/snow_mask.tif", overwrite=T)
+
+
 
 # removal of shade
 # look at the NIR range of the tundra pixel 
@@ -98,11 +128,11 @@ shade_mask <- ifel(sent_aoi_stack_crop["T13WDS_20190727T185929_B08_10m"]<1000, N
 par(mfrow=c(1,2))
 plot(shade_mask)
 plot(water_mask)
+writeRaster(shade_mask, filename = "~/master-thesis/sent_output/shade_mask.tif")
 
-########
-NDVI <- (sent_aoi_stack_crop["T13WDS_20190727T185929_B08_10m"]- sent_aoi_stack_crop["T13WDS_20190727T185929_B04_10m"])/(sent_aoi_stack_crop["T13WDS_20190727T185929_B08_10m"]+sent_aoi_stack_crop["T13WDS_20190727T185929_B04_10m"])
-plot(NDVI)
-NDVI_mask <- ifel(NDVI>-0.5, 1, NA)
+
+civilized_pix <- ifel(sent_aoi_stack_crop["T13WDS_20190727T185929_B04_10m"]>2000 & sent_aoi_stack_crop["T13WDS_20190727T185929_B03_10m"]>2000 & sent_aoi_stack_crop["T13WDS_20190727T185929_B02_10m"]>2000, 1, NA)
+plot(civilized_pix)
 
 
 ################################
