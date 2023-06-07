@@ -16,47 +16,94 @@ area_interest_proj <- st_transform(area_interest,32613)
 ############################
 
 # need first the spatial downscaling to have all bands at 10m resolution
-#
-path <- c("/data/mpijne/L2A_T13WES_A012480_20190727T190134_IMG_DATA", "/data/mpijne/L2A_T13WDS_A012480_20190727T190134_IMG_DATA")
-data_list <- list.files(path=path, recursive = T, full.names = T, pattern = "B.._10m.jp2|B.._20m.jp2")
-#data_list <- data_list[-grep("B01|B09|B10", data_list)]
-sent <- lapply(1:length(data_list), function(x) {rast(data_list[x])})
-#crop all bands to the size of the area of interest
-sent_crop <- lapply(1:length(sent), function(x){crop(sent[[x]], area_interest_proj)})
+path <- c("/home/mpijne/data/L2A_T13WDS_A012480_20190727T190134_IMG_DATA/R20m", "/home/mpijne/data/L2A_T13WES_A012480_20190727T190134_IMG_DATA/R20m")
+data_list <- list.files(path=path, recursive = T, full.names = T, pattern="B.._20m.jp2$")
+# remove bands that are already at 10m resolution
+data_list <- data_list[-grep("B02|B03|B04|B08", data_list)]
+sent20 <- lapply(1:length(data_list), function(x){rast(data_list[x])})
+sent_disagg <- lapply(1:length(sent20), function(x){disagg(sent20[[x]], fact=2, method="bilinear")})
+# sent20_crop <- lapply(1:length(sent_disagg), function(x){crop(sent_disagg[[x]], area_interest_proj)})
 
-# mosaic
-sent_tot <- list()
-for (x in 1:(length(sent)/2)) {
-    sent_tot[x] <- mosaic(sent[[x]], sent[[x+length(sent)/2]])
+path <- c("/home/mpijne/data/L2A_T13WDS_A012480_20190727T190134_IMG_DATA/R10m", "/home/mpijne/data/L2A_T13WES_A012480_20190727T190134_IMG_DATA/R10m")
+data_list <- list.files(path=path, recursive = T, full.names = T, pattern="B.._10m.jp2$")
+sent10 <- lapply(1:length(data_list), function(x) {rast(data_list[x])})
+# sent10_crop <- lapply(1:length(sent10), function(x){crop(sent10[[x]], area_interest_proj)})
+
+sent10_tot <- c(sent_disagg, sent10)
+
+name <- c()
+for(x in 1:length(sent10_tot)){
+  name[x] <- names(sent10_tot[[x]])
 }
-sent_tot
+names(sent10_tot) <- name
+name <- sort(name)
+
+sent_aoi <- list()
+for (x in 1:(length(name)/2)) {
+  pat <- substr(name[x], 24, 26)
+  ind <- grep(pattern=pat, names(sent10_tot))
+  sent_aoi[[x]] <- mosaic(sent10_tot[[ind[1]]], sent10_tot[[ind[2]]])
+}
+
+sent_aoi_stack <- rast(sent_aoi)
+plotRGB(sent_aoi_stack, r=3, g=2, b=1, scale=10000, stretch="lin")
+lines(area_interest_proj, col="red")
+# why lines doesn't actually add a line???
+# writeRaster(sent_aoi_stack, filename="output/full_stack_view.tif")
+
+sent_aoi_stack <- rast("output/full_stack_view.tif")
+
+sent_aoi_stack_crop <- crop(sent_aoi_stack, area_interest_proj)
+writeRaster(sent_aoi_stack_crop, filename="output/sent_crop_view.tif")
+
+plotRGB(sent_aoi_stack_crop, r=3, g=2, b=1, scale=10000, stretch="lin")
+# why do we have such a different color after cropping 
+plot(area_interest_proj, add=T, col="red")
+
 
 #data cleaning 
 #removal of water bodies
 
-names(sent_20_stack_int)
+names(sent_aoi_stack_crop)
 SWIR <- (sent_20_stack_int["T13WDS_20170811T185921_B11"]+sent_20_stack_int["T13WDS_20170811T185921_B12"])/2
 #NDWI <- (SWIR - sent_20_stack_int["T13WDS_20170811T185921_B08"])/(SWIR +sent_20_stack_int["T13WDS_20170811T185921_B08"])
-NDWI <- (sent_20_stack_int["T13WDS_20170811T185921_B03"] - sent_20_stack_int["T13WDS_20170811T185921_B08"])/(sent_20_stack_int["T13WDS_20170811T185921_B03"] +sent_20_stack_int["T13WDS_20170811T185921_B08"])
-water_mask <- ifel(NDWI>=0.2, NA, 1)
+NDWI <- (sent_aoi_stack_crop["T13WDS_20190727T185929_B03_10m"] - sent_aoi_stack_crop["T13WDS_20190727T185929_B08_10m"])/(sent_aoi_stack_crop["T13WDS_20190727T185929_B03_10m"] +sent_aoi_stack_crop["T13WDS_20190727T185929_B08_10m"])
 plot(NDWI)
-sent_20_stack_int_nowa <- mask(sent_20_stack_int, mask=water_mask)
-plotRGB(sent_20_stack_int_nowa, r=3, g=2, b=1 ,scale=10000, stretch="lin")  
+# some water pixel have actually value very close to 0, which is weird but also means that they are not filtered
+water_mask <- ifel(NDWI>=0.2, NA, 1)
+# writeRaster(water_mask, filename = "output/water_mask.tif", overwrite=TRUE)
+mask_test <- ifel(sent_aoi_stack_crop["T13WDS_20190727T185929_B03_10m"]==1 & sent_aoi_stack_crop["T13WDS_20190727T185929_B04_10m"]==1, NA, 1)
+plot(mask_test)
+sent_aoi_stack_crop_nowa <- mask(sent_aoi_stack_crop, mask=water_mask)
+plotRGB(sent_aoi_stack_crop_nowa, r=3, g=2, b=1
+        ,scale=10000, stretch="lin"
+)  
 #why so different now?
 
 #removal of snowed pixel
-NDSI <- (sent_20_stack_int_nowa["T13WDS_20170811T185921_B03"] - sent_20_stack_int_nowa["T13WDS_20170811T185921_B11"])/(sent_20_stack_int_nowa["T13WDS_20170811T185921_B03"] + sent_20_stack_int_nowa["T13WDS_20170811T185921_B11"])
+NDSI <- (sent_aoi_stack_crop_nowa["T13WDS_20190727T185929_B03_10m"] - sent_aoi_stack_crop_nowa["T13WDS_20190727T185929_B11_20m"])/(sent_aoi_stack_crop_nowa["T13WDS_20190727T185929_B03_10m"] + sent_aoi_stack_crop_nowa["T13WDS_20190727T185929_B11_20m"])
 plot(NDSI)
 
 # removal of shade
 # look at the NIR range of the tundra pixel 
-grep(pattern="B_08", sent_crop)
-for(x in 1:length(sent_crop)){
-  n <- names(sent_crop[[x]])
+grep(pattern="B08", names(sent_aoi_stack_crop))
+for(x in 1:nlyr(sent_aoi_stack_crop)){
+  n <- names(sent_aoi_stack_crop)[x]
   if (grepl("B08_10m", n)==T) {
-    hist(sent_crop[[x]]) 
+    hist(sent_aoi_stack_crop[[x]]) 
   }
 }
+
+shade_mask <- ifel(sent_aoi_stack_crop["T13WDS_20190727T185929_B08_10m"]<1000, NA, 1)
+par(mfrow=c(1,2))
+plot(shade_mask)
+plot(water_mask)
+
+########
+NDVI <- (sent_aoi_stack_crop["T13WDS_20190727T185929_B08_10m"]- sent_aoi_stack_crop["T13WDS_20190727T185929_B04_10m"])/(sent_aoi_stack_crop["T13WDS_20190727T185929_B08_10m"]+sent_aoi_stack_crop["T13WDS_20190727T185929_B04_10m"])
+plot(NDVI)
+NDVI_mask <- ifel(NDVI>-0.5, 1, NA)
+
 
 ################################
 # Sentinel2 data from 27th of July 2019
@@ -71,7 +118,7 @@ data_list <- data_list[grep("B02|B03|B04|B08", data_list)]
 sent <- lapply(1:length(data_list), function(x) {rast(data_list[x])})
 sent_tot <- list()
 for (x in 1:(length(sent)/2)) {
-    sent_tot[x] <- mosaic(sent[[x]], sent[[x+length(sent)/2]])
+  sent_tot[x] <- mosaic(sent[[x]], sent[[x+length(sent)/2]])
 }
 sent_tot
 #Aggregating 10m resulotion band to 20 meter resolution bands:
@@ -90,7 +137,3 @@ lines(area_interest_proj, col="red")
 sent_stack <- rast(sent_tot)
 plotRGB(sent_stack, r=3, g=2, b=1 ,scale=10000, stretch="lin")
 lines(area_interest_proj, col="red")
-
-
-
-
