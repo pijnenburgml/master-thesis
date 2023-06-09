@@ -10,7 +10,7 @@ library(terra)
 ############################
 area_interest <- st_read("areas_of_interest.gpkg")
 area_interest_proj <- st_transform(area_interest,32613)
-
+ 
 ############################
 # Sentinel2 data from 11th of August 2019
 ############################
