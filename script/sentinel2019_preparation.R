@@ -4,6 +4,7 @@ library(tidyverse)
 library(dplyr)
 library(terra)
 library(tidyterra)
+library(stars)
 library(biodivMapR)
 
 ############################
@@ -175,6 +176,49 @@ try_build_mask <- mask(sent_aoi_stack_crop, build_area_2022, inverse=T, updateva
 #   # + geom_spatvector(data=build_area_2022)
 
 
+#######
+# remove cell below the aoi
+#######
+
+area_interest_proj_poly <- vect(area_interest_proj)
+area_interest_proj_poly <- st_as_sf(area_interest_proj_poly)
+sent_star <- read_stars("output/sent_crop_view.tif")
+sent_sf <- st_as_sf(sent_star)
+# sent_sf_seg <- st_boundary(sent_sf)
+# table(st_geometry_type(sent_sf_seg))
+# plot(sent_sf_seg)
+try <- st_intersects(sent_sf, area_interest_proj_poly)
+intersect <- lengths(try) > 0
+sent_sf_poly <- sent_sf[,11]
+plot(ext(sent_aoi_stack_crop))
+plot(sent_sf_poly[intersect,], col = "red")
+try2 <- st_intersects(sent_sf, area_interest_proj_poly, sparse=FALSE)
+which(apply(try2, 1, any))
+# might want to try with st_intesect
+
+sent_poly <- as.polygons(ext(sent_aoi_stack_crop))
+sent_poly_sf <- st_as_sf(sent_poly)
+st_crs(sent_poly_sf) <- crs(sent_aoi_stack_crop)
+plot(sent_poly_sf)
+try3 <- st_intersects(sent_poly_sf, area_interest_proj_poly, sparse=F)
+try3 <- st_intersection(sent_poly_sf, area_interest_proj_poly)
+intersection <- st_cast(try3, "POINT")
+plot(intersection, add=T, col="red")
+
+sent_poly <- as.polygons(sent_aoi_stack_crop)
+# plot(sent_poly)
+# plot(area_interest_proj_poly, add=T)
+area_interest_proj_poly <- vect(area_interest_proj)
+try <- sharedPaths(sent_poly, area_interest_proj_poly)
+
+sent_poly <- st_as_sf(sent_aoi_stack_crop)
+summary(area_interest_proj_poly)
+plot(area_interest_proj_poly)
+try <- st_intersection(sent_poly, area_interest_proj_poly)
+try <- terra::intersect(area_interest_proj_poly, sent_poly)
+plot(try)
+
+
 ########
 # make only 1 mask file out of the several I have
 ########
@@ -191,36 +235,3 @@ mask_wa_sh_bul <- mosaic(mask_wa_sh, try_build_mask["T13WDS_20190727T185929_B02_
 writeRaster(mask_wa_sh_bul, filename = "~/master-thesis/sent_output/mask_wa_sh_bul.tif")
 plot(mask_wa_sh_bul)
 
-
-################################
-# Sentinel2 data from 27th of July 2019
-################################
-############################
-
-#Mosaic 2 tiles together:
-path <- c("C:/Users/Marie/OneDrive/Documents/master/master thesis/master-thesis/data 2019/S2B_MSIL1C_20190727T185929_N0208_R013_T13WDS_20190727T210028.SAFE", "C:/Users/Marie/OneDrive/Documents/master/master thesis/master-thesis/data 2019/S2B_MSIL2A_20190727T185929_N0213_R013_T13WES_20190727T214238.SAFE/GRANULE/L2A_T13WES_A012480_20190727T190134/IMG_DATA/R10m")
-data_list <- list.files(path=path, recursive = T, full.names = T, pattern = "B*jp2$")
-# data_list <- data_list[-grep("B01|B09|B10|TCI|PVI|AOT|WVP", data_list)]
-data_list <- data_list[grep("B02|B03|B04|B08", data_list)]
-sent <- lapply(1:length(data_list), function(x) {rast(data_list[x])})
-sent_tot <- list()
-for (x in 1:(length(sent)/2)) {
-  sent_tot[x] <- mosaic(sent[[x]], sent[[x+length(sent)/2]])
-}
-sent_tot
-#Aggregating 10m resulotion band to 20 meter resolution bands:
-# ten_band <- c(1,2,3,7)
-# sent_aggr <- lapply(ten_band, function(x) {aggregate(sent_tot[[x]], 2)})
-# sent_20 <- c(sent_aggr[c(1,2,3)], sent_tot[c(4,5,6)], sent_aggr[4], sent_tot[c(8,9,10)])
-# sent_20_stack <- rast(sent_20)
-# sent_20_stack
-# ext(area_interest_proj)
-# sent_20_stack_int <- crop(sent_20_stack, area_interest_proj)
-#writeRaster(sent_20_stack_int, "sentinel2_aoi_20mr.tif")
-sentinel2_aoi_20mr <- rast("sentinel2_aoi_20mr.tif")
-summary(sentinel2_aoi_20mr)
-plotRGB(sentinel2_aoi_20mr, r=3, g=2, b=1 ,scale=10000, stretch="lin")
-lines(area_interest_proj, col="red")
-sent_stack <- rast(sent_tot)
-plotRGB(sent_stack, r=3, g=2, b=1 ,scale=10000, stretch="lin")
-lines(area_interest_proj, col="red")
