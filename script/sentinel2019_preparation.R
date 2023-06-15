@@ -5,6 +5,7 @@ library(dplyr)
 library(terra)
 library(tidyterra)
 library(stars)
+library(raster)
 library(biodivMapR)
 
 ############################
@@ -200,8 +201,52 @@ sent_poly <- as.polygons(ext(sent_aoi_stack_crop))
 sent_poly_sf <- st_as_sf(sent_poly)
 st_crs(sent_poly_sf) <- crs(sent_aoi_stack_crop)
 plot(sent_poly_sf)
+text(st_coordinates(sent_poly_sf)[,1:2], labels=c(1:5))
+# 476480, 7657730; 517470, 7657730
+
+
+coin <- matrix(c(476480, 7657730,476481, 7672582), byrow = T, ncol=2)
+poly <- st_polygon(list(sep_segment, coin))
+
+poly <- st_sfc(sep_segment, coin)
+mask_try <- st_cast(poly, "LINESTRING")
+
 try3 <- st_intersects(sent_poly_sf, area_interest_proj_poly, sparse=F)
 try3 <- st_intersection(sent_poly_sf, area_interest_proj_poly)
+text(st_coordinates(try3)[,1:2], labels=c(1:110))
+#from 4 to 97
+sep_segment <- matrix(st_coordinates(try3)[4:97,1:2], ncol=2)
+coin <- matrix(c(476480, 7657730, 515773.2, 7657730), ncol=2, byrow = T)
+sep_segment <- rbind(sep_segment, coin)
+plot(sep_segment)
+sep_poly <- st_linestring(sep_segment)
+sep_poly_poly <- st_cast(sep_poly, "POLYGON")
+plot(sep_poly_poly)
+sep_poly_vect <- vect(sep_poly_poly)
+crs(sep_poly_vect) <- crs(sent_aoi_stack_crop)
+plot(sep_poly_vect, add=T, col="green")
+
+sep_segment <- st_linestring(st_coordinates(try3)[4:97,1:2])
+plot(sep_segment)
+points(515773.2, 7657730, col="blue")
+points(476481, 7672582, col="red")
+
+
+ext(sent_aoi_stack_crop)
+plotRGB(sent_aoi_stack_crop, r=4, g=3, b=2, scale=10000, stretch="lin")
+plot(sep_segment, add=T, col="red")
+mask_below <- crop(sent_aoi_stack_crop, as(sep_segment, "Spatial"))
+plotRGB(mask_below,r=4, g=3, b=2, scale=10000, stretch="lin")
+linestring_spat <- vect(sep_segment)
+crs(linestring_spat) <- crs(sent_aoi_stack_crop)
+sep_segment_spat <- vect(sep_segment)
+mask_try <- snap(sent_poly, sep_segment_spat, tol=500)
+plot(mask_try)
+
+mask_try <- rasterize(linestring_spat, sent_aoi_stack_crop, field = 1)
+plot(mask_try, col = "blue")
+raster_data[mask == 1] <- 0
+
 intersection <- st_cast(try3, "POINT")
 plot(intersection, add=T, col="red")
 
