@@ -172,6 +172,8 @@ plot(civilized_pix)
 
 sent_aoi_stack_crop[build_area_2022]
 try_build_mask <- mask(sent_aoi_stack_crop, build_area_2022, inverse=T, updatevalue=0)
+try_build_mask <- ifel(try_build_mask!=0, NA, 0)
+plot(try_build_mask)
 # ggplot()+
 #   geom_spatraster_rgb(data=try_build_mask, r=3, g=2, b=1)
 #   # + geom_spatvector(data=build_area_2022)
@@ -181,102 +183,49 @@ try_build_mask <- mask(sent_aoi_stack_crop, build_area_2022, inverse=T, updateva
 # remove cell below the aoi
 #######
 
+# aoi as an st object
 area_interest_proj_poly <- vect(area_interest_proj)
 area_interest_proj_poly <- st_as_sf(area_interest_proj_poly)
-sent_star <- read_stars("output/sent_crop_view.tif")
-sent_sf <- st_as_sf(sent_star)
-# sent_sf_seg <- st_boundary(sent_sf)
-# table(st_geometry_type(sent_sf_seg))
-# plot(sent_sf_seg)
-try <- st_intersects(sent_sf, area_interest_proj_poly)
-intersect <- lengths(try) > 0
-sent_sf_poly <- sent_sf[,11]
-plot(ext(sent_aoi_stack_crop))
-plot(sent_sf_poly[intersect,], col = "red")
-try2 <- st_intersects(sent_sf, area_interest_proj_poly, sparse=FALSE)
-which(apply(try2, 1, any))
-# might want to try with st_intesect
-
+# the boundaries (rectangle) of the sentinel data as an st object 
 sent_poly <- as.polygons(ext(sent_aoi_stack_crop))
 sent_poly_sf <- st_as_sf(sent_poly)
 st_crs(sent_poly_sf) <- crs(sent_aoi_stack_crop)
 plot(sent_poly_sf)
 text(st_coordinates(sent_poly_sf)[,1:2], labels=c(1:5))
-# 476480, 7657730; 517470, 7657730
+# 476480, 7657730; 517470, 7657730 --> coordinates of the two bottom edge 
 
-
-coin <- matrix(c(476480, 7657730,476481, 7672582), byrow = T, ncol=2)
-poly <- st_polygon(list(sep_segment, coin))
-
-poly <- st_sfc(sep_segment, coin)
-mask_try <- st_cast(poly, "LINESTRING")
-
-try3 <- st_intersects(sent_poly_sf, area_interest_proj_poly, sparse=F)
+# Get the intersection coordinate from the tow sf object 
 try3 <- st_intersection(sent_poly_sf, area_interest_proj_poly)
 text(st_coordinates(try3)[,1:2], labels=c(1:110))
-#from 4 to 97
-sep_segment <- matrix(st_coordinates(try3)[4:97,1:2], ncol=2)
-coin <- matrix(c(476480, 7657730, 515773.2, 7657730), ncol=2, byrow = T)
-sep_segment <- rbind(sep_segment, coin)
+#from 4 to 97 --> our segment of interest
+sep_segment <- matrix(st_coordinates(try3)[4:97,1:2], ncol=2) # make a matrix form the coordinate of interest
+coin <- matrix(c(476480, 7657730, 515773.2, 7657730), ncol=2, byrow = T) # make a matrix with the coordinate of the bottom left edge + the first coordinate of the segment to be able to form a closed polygon 
+sep_segment <- rbind(sep_segment, coin) #bind together 
 plot(sep_segment)
-sep_poly <- st_linestring(sep_segment)
-sep_poly_poly <- st_cast(sep_poly, "POLYGON")
-plot(sep_poly_poly)
-sep_poly_vect <- vect(sep_poly_poly)
-crs(sep_poly_vect) <- crs(sent_aoi_stack_crop)
+sep_poly <- st_linestring(sep_segment) # make a linestring object out of our matrix
+sep_poly_poly <- st_cast(sep_poly, "POLYGON") # make a polygon out of the linestring
+plot(sep_poly_poly) 
+sep_poly_vect <- vect(sep_poly_poly) # make a SpatVector object
+crs(sep_poly_vect) <- crs(sent_aoi_stack_crop) 
+plotRGB(sent_aoi_stack_crop, r=3, g=2, b=1, scale=10000, stretch="lin")
 plot(sep_poly_vect, add=T, col="green")
 
-sep_segment <- st_linestring(st_coordinates(try3)[4:97,1:2])
-plot(sep_segment)
-points(515773.2, 7657730, col="blue")
-points(476481, 7672582, col="red")
-
-
-ext(sent_aoi_stack_crop)
-plotRGB(sent_aoi_stack_crop, r=4, g=3, b=2, scale=10000, stretch="lin")
-plot(sep_segment, add=T, col="red")
-mask_below <- crop(sent_aoi_stack_crop, as(sep_segment, "Spatial"))
-plotRGB(mask_below,r=4, g=3, b=2, scale=10000, stretch="lin")
-linestring_spat <- vect(sep_segment)
-crs(linestring_spat) <- crs(sent_aoi_stack_crop)
-sep_segment_spat <- vect(sep_segment)
-mask_try <- snap(sent_poly, sep_segment_spat, tol=500)
-plot(mask_try)
-
-mask_try <- rasterize(linestring_spat, sent_aoi_stack_crop, field = 1)
-plot(mask_try, col = "blue")
-raster_data[mask == 1] <- 0
-
-intersection <- st_cast(try3, "POINT")
-plot(intersection, add=T, col="red")
-
-sent_poly <- as.polygons(sent_aoi_stack_crop)
-# plot(sent_poly)
-# plot(area_interest_proj_poly, add=T)
-area_interest_proj_poly <- vect(area_interest_proj)
-try <- sharedPaths(sent_poly, area_interest_proj_poly)
-
-sent_poly <- st_as_sf(sent_aoi_stack_crop)
-summary(area_interest_proj_poly)
-plot(area_interest_proj_poly)
-try <- st_intersection(sent_poly, area_interest_proj_poly)
-try <- terra::intersect(area_interest_proj_poly, sent_poly)
-plot(try)
-
+mask_below <- mask(sent_aoi_stack_crop, sep_poly_vect, inverse=T, updatevalue=0)
+plot(mask_below)
+mask_below_try <- ifel(mask_below!=0, NA, 0)
+plotRGB(sent_aoi_stack_crop, r=3, g=2, b=1, scale=10000, stretch="lin")
+plot(mask_below_try["T13WDS_20190727T185929_B02_10m"], add=T)
 
 ########
 # make only 1 mask file out of the several I have
 ########
 
-which(water_mask[,]==1)
-which(shade_mask[,]==1)
-
-shade_mask_df <- as.data.frame(shade_mask)
-water_mask_df <- as.data.frame(water_mask)
-# sent_aoi_stack_crop as 12042862 pixels. seems like the shade_mask_df and the water_mask_df present different number of pixels though
-
 mask_wa_sh <- mosaic(water_mask, shade_mask, fun="min")
 mask_wa_sh_bul <- mosaic(mask_wa_sh, try_build_mask["T13WDS_20190727T185929_B02_10m"], fun="min")
-writeRaster(mask_wa_sh_bul, filename = "~/master-thesis/sent_output/mask_wa_sh_bul.tif")
 plot(mask_wa_sh_bul)
+
+mask_final <- mosaic(mask_wa_sh_bul, mask_below_try["T13WDS_20190727T185929_B02_10m"], fun="min")
+plot(mask_final)
+# writeRaster(mask_final, filename = "~/master-thesis/sent_output/mask_sent2_final.tif")
+
 
