@@ -228,4 +228,26 @@ mask_final <- mosaic(mask_wa_sh_bul, mask_below_try["T13WDS_20190727T185929_B02_
 plot(mask_final)
 # writeRaster(mask_final, filename = "~/master-thesis/sent_output/mask_sent2_final.tif")
 
+mask <- rast("~/master-thesis/sent_output/mask_sent2_final.tif")
+plot(mask)
+mask <- ifel(mask==0, NA, 1)
+plot(mask)
+# writeRaster(mask, filename = "~/master-thesis/sent_output/mask_sent2_final_NA.tif")
+
+
+
+### Plot for pitch n purpose
+# sent_mask <- mask(sent_aoi_stack_crop, mask=mask, maskvalues=0)
+# ggplot()+
+#   geom_spatraster_rgb(data=sent_mask)
+# 
+# plotRGB(sent_mask, r=3, g=2, b=1, scale=10000, stretch="lin")
+# 
+# hist(sent_mask)
+# plot(sent_mask["T13WDS_20190727T185929_B12_20m"])
+
+
+
+
+
 
