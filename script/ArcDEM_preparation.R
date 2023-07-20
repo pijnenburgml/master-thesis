@@ -75,7 +75,7 @@ sd_topo <- Arc_DEM_vect$X29_21_1_1
 Sentinel_vect$sd_topo <- sd_topo
 spatial <- 1:length(Sentinel_vect$Shannon_10)
 Sentinel_vect$spatial <- as.numeric(spatial)
-writeVector(Sentinel_vect, filename = "~/data/output/model_object.shp", overwrite=T)
+# writeVector(Sentinel_vect, filename = "~/data/output/model_object.shp", overwrite=T)
 Sentinel_lattice <-readOGR("~/data/output/model_object.shp")
 
 
