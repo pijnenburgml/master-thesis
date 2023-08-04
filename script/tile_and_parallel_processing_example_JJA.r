@@ -96,7 +96,7 @@ grid_polygons <- map2(grid_cell_combos$x, grid_cell_combos$y, .f = generate_tile
     bind_rows()
 
 # Plot to check it worked
-mask <- rast("~/master-thesis/sent_output/mask_sent2_final.tif")
+# mask <- rast("~/master-thesis/sent_output/mask_sent2_final.tif")
 ggplot() +
   geom_sf(
     data = grid_polygons,
@@ -121,69 +121,46 @@ ggplot(data=grid_polygons) +
   geom_sf(data=try_proj, aes(fill="red"))
 st_intersects(grid_polygons[grep(pattern="x_1_y_17", grid_polygons$cell_id),], try_proj)
 
-
-# plotRGB(sent_aoi_stack_crop, r=3, g=2, b=1, scale=10000, stretch="lin")
-# plot(try_proj$geometry, add=T, col="red")
-# plot(grid_polygons$geometry, col=NA, border=1, )
+######################
+# make multipolygon from all the fligth strip boundaries
+######################
 
 boundaries_sf <- lapply(boundaries, FUN=st_read)
 for(i in 1:length(boundaries_sf)){
   boundaries_sf[[i]] <- st_transform(boundaries_sf[[i]],32613) 
 }
 
+# Get names
 # substr(boundaries, 42, 75)
 boundaries_sf[[1]]$Name
-
 boundaries_name <- c()
 for(i in 1:length(boundaries_sf)){
   boundaries_name[i] <- boundaries_sf[[i]]$Name
 }
 names(boundaries_sf) <- boundaries_name
 
-try_multi <- c(boundaries_sf[[1]]$geometry, boundaries_sf[[2]]$geometry) %>% st_cast("MULTIPOLYGON")
-names(try_multi) <- boundaries_name[1:2]
-class(try_multi)
-st_intersects(try_multi, grid_polygons[grep(pattern="x_5_y_17", grid_polygons$cell_id),], sparse = FALSE)
-x <- st_intersects(try_multi, grid_polygons[grep(pattern="x_5_y_17", grid_polygons$cell_id),], sparse = T)
-apply(x, 1, any)
-
-p <- c()
-for (y in 1:length(boundaries_sf)) {
-  p[y] <- boundaries_sf[[y]]$geometry
-}
-
+# get all the objects from the boundaries_sf list into a  
 cat(paste(rep("boundaries_sf[[", 16), 1:16, rep("]]$geometry", 16), sep=""), sep=",")
+# copy-paste output
 boundaries_multipolygon <- c(boundaries_sf[[1]]$geometry, boundaries_sf[[2]]$geometry,boundaries_sf[[3]]$geometry,boundaries_sf[[4]]$geometry,
   boundaries_sf[[5]]$geometry,boundaries_sf[[6]]$geometry,boundaries_sf[[7]]$geometry,boundaries_sf[[8]]$geometry,
   boundaries_sf[[9]]$geometry,boundaries_sf[[10]]$geometry,boundaries_sf[[11]]$geometry,boundaries_sf[[12]]$geometry,
   boundaries_sf[[13]]$geometry,boundaries_sf[[14]]$geometry,boundaries_sf[[15]]$geometry,boundaries_sf[[16]]$geometry)%>% st_cast("MULTIPOLYGON")
 plot(boundaries_multipolygon)
 names(boundaries_multipolygon) <- boundaries_name
-idx <- which(st_intersects(boundaries_multipolygon,  grid_polygons[grep(pattern="x_5_y_17", grid_polygons$cell_id),], sparse = F)==T)
-names(boundaries_multipolygon[1:2])
+idx <- which(st_intersects(boundaries_multipolygon, filter(grid_polygons, cell_id=="x_40_y_30"), sparse = F)==T)
+file <- names(boundaries_multipolygon[idx])
 
-polygons_list <- list()
-for (i in 1:length(boundaries_sf)) {
-  polygons_list[[i]] <- boundaries_sf[[i]]$geometry[[1]]
-}
-polygons_list_XY <- st_zm(polygons_list)
-names(polygons_list_XY) <- boundaries_name
-boundaries_multipolygon <- st_multipolygon(x=polygons_list_XY, dim="XY")
-plot(boundaries_multipolygon)
+plot(boundaries_multipolygon[idx], add=T, col="orange", alpha=0.1)
+plot(filter(grid_polygons, cell_id=="x_40_y_30"), add=T, col="red")
+plot(boundaries_multipolygon, add=T, col="grey")
 
-# polygons_list <- st_polygon()
-# for (i in 1:length(boundaries_sf)) {
-#   polygons_list[[i]] <- boundaries_sf[[i]]$geometry
-# }
-# boundaries_multipolygon <- st_cast(polygons_list, "MULTIPOLYGON")
-# try_multi <- polygons_list %>% st_cast("MULTIPOLYGON")
-
-
-geom <- st_geometry(grid_polygons[grep(pattern="x_5_y_17", grid_polygons$cell_id),])
-id <- which(st_intersects(geom,boundaries_multipolygon))
-
-for (x in 1:length(boundaries_sf)) {
-  st_intersects(grid_polygons[grep(pattern="x_5_y_17", grid_polygons$cell_id),], boundaries_sf[[x]])  
+if (length(file)>0) {
+  idx_file <- list.files("~/data/Aviris_data/boundaries/") %>% grep(pattern=paste(substr(file,0,18),collapse="|")) #to be change to real file folder and not boundaries
+  paste("~/data/Aviris_data/boundaries/", list.files("~/data/Aviris_data/boundaries/")[idx_file], sep="")
+    for (x in 1:length(idx_file)) {
+      st_read(paste("~/data/Aviris_data/boundaries/", list.files("~/data/Aviris_data/boundaries/")[x], sep=""))
+  }
 }
 
 
