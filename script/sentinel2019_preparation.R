@@ -57,15 +57,17 @@ lines(area_interest_proj, col="red")
 # why lines doesn't actually add a line???
 # writeRaster(sent_aoi_stack, filename="output/full_stack_view.tif")
 
-sent_aoi_stack <- rast("output/full_stack_view.tif")
+sent_aoi_stack <- rast("~/data/output/full_stack_view.tif")
 # mkdir ~/master-thesis/sent_output
 # writeRaster(sent_aoi_stack, filename = "~/master-thesis/sent_output/sent_aoi_stack.tif", overwrite=T)
 
 sent_aoi_stack_crop <- crop(sent_aoi_stack, area_interest_proj)
 # writeRaster(sent_aoi_stack_crop, filename="output/sent_crop_view.tif")
 # writeRaster(sent_aoi_stack_crop, filename = "~/master-thesis/sent_output/sent_aoi_stack_crop.tif")
+# writeRaster(sent_aoi_stack_crop, filetype="ENVI", gdal="INTERLEAVE=BIL", filename = "output/sent_crop_envi", overwrite=T)
 
-sent_aoi_stack_crop <- rast("output/sent_crop_view.tif")
+
+sent_aoi_stack_crop <- rast("~/data/output/sent_crop_view.tif")
 
 plotRGB(sent_aoi_stack_crop, r=3, g=2, b=1, scale=10000, stretch="lin")
 # why do we have such a different color after cropping 
@@ -108,6 +110,7 @@ water_mask <- ifel(NDWI>=0.2, 0, 1)
 # ########
 # NDVI <- (sent_aoi_stack_crop["T13WDS_20190727T185929_B08_10m"]- sent_aoi_stack_crop["T13WDS_20190727T185929_B04_10m"])/(sent_aoi_stack_crop["T13WDS_20190727T185929_B08_10m"]+sent_aoi_stack_crop["T13WDS_20190727T185929_B04_10m"])
 # plot(NDVI)
+# writeRaster(NDVI, filename = "~/data/output/Sentinel_NDVI.tif")
 # NDVI_mask <- ifel(NDVI>-0.5, 1, 0)
 # plot(NDVI_mask)
 # # writeRaster(NDVI_mask, filename = "~/master-thesis/sent_output/NDVI_mask.tif")
@@ -116,6 +119,7 @@ water_mask <- ifel(NDWI>=0.2, 0, 1)
 # ggplot()+
 #   geom_spatraster_rgb(data=sent_aoi_stack_crop_nowa_NDVI, r=3, g=2, b=1)
 # 
+
 # #######
 # # snow pixel removal
 # #######
@@ -232,22 +236,16 @@ mask <- rast("~/master-thesis/sent_output/mask_sent2_final.tif")
 plot(mask)
 mask <- ifel(mask==0, NA, 1)
 plot(mask)
-# writeRaster(mask, filename = "~/master-thesis/sent_output/mask_sent2_final_NA.tif")
-
-
+# writeRaster(mask, filename = "~/data/output/mask_sent2_final_NA.tif")
+# writeRaster(mask, filename = "~/data/biodivmapR_sent/mask_sent2_final_NA", filetype="ENVI", gdal="INTERLEAVE=BSQ", overwrite=T, datatype="INT1U")
 
 ### Plot for pitch n purpose
-# sent_mask <- mask(sent_aoi_stack_crop, mask=mask, maskvalues=0)
-# ggplot()+
-#   geom_spatraster_rgb(data=sent_mask)
-# 
-# plotRGB(sent_mask, r=3, g=2, b=1, scale=10000, stretch="lin")
-# 
-# hist(sent_mask)
-# plot(sent_mask["T13WDS_20190727T185929_B12_20m"])
+sent_mask <- mask(sent_aoi_stack_crop, mask=mask, maskvalues=0)
+ggplot()+
+  geom_spatraster_rgb(data=sent_mask)
 
+plotRGB(sent_mask, r=3, g=2, b=1, scale=10000, stretch="lin")
 
-
-
-
-
+hist(sent_mask)
+viridis_colors <- viridis::plasma(60)
+plot(sent_mask["T13WDS_20190727T185929_B12_20m"], col=viridis_colors[60:1])
