@@ -13,12 +13,14 @@ library(dissUtils)
 library(biodivMapR)
 library(ggplot2)
 library(cowplot)
+library(tools)
+library(patchwork)
 ################################################################################
 # sent <- rast("~/data/biodivmapR_sent/sent_crop_envi")
 # writeRaster(sent, filename = "~/data/biodivmapR_sent/sent_crop_envi_BIL", filetype="ENVI", gdal=c("INTERLEAVE=BIL"), overwrite=T)
 
 ################################################################################
-Datadir <- "~/data/biodivmapR_sent/"
+Datadir <- "~/data/biodivmapR_sent"
 NameRaster <- "sent_crop_envi_BIL"
 # Define path for image file to be processed
 Input_Image_File <- file.path(Datadir,NameRaster)
@@ -29,6 +31,7 @@ Input_Mask_File <- file.path(Datadir, NameMask)
 # Define path for master output directory where files produced during the process are saved
 Output_Dir <- '~/data/biodivmapR_sent/RESULTS'
 Output_Dir <- '~/data/biodivmapR_sent/RESULTS_cluster_20'
+Output_Dir <- "~/data/biodivmapR_sent/RESULTS_PC_selection"
 # dir.create(path = Output_Dir,recursive = T,showWarnings = F)
 # NDVI_Thresh <- 0.8
 # Blue_Thresh <- 500
@@ -45,7 +48,7 @@ FilterPCA <- F
 window_size <-10
 # # computational parameters
 nbCPU <- 2
-MaxRAM <- 12
+MaxRAM <- 10
 # number of clusters (spectral species)
 nbclusters <- 50
 nbclusters <- 20
@@ -112,8 +115,6 @@ m <- ggplot() +
 m  
 dev.off()
 
-
-
 # Select components from the PCA/SPCA/MNF raster
 # Sel_PC = path of the file where selected components are stored
 Sel_PC <- select_PCA_components(Input_Image_File = Input_Image_File,
@@ -123,7 +124,7 @@ Sel_PC <- select_PCA_components(Input_Image_File = Input_Image_File,
                                 File_Open = TRUE)
 
 
-SelectedPCs = c(1,2,8,9)
+SelectedPCs = c(1,2,7,8,9)
 
 ################################################################################
 ##                  Perform Spectral species mapping                          ##
@@ -139,12 +140,28 @@ Kmeans_info <- map_spectral_species(Input_Image_File = Input_Image_File,
                                     nbCPU = nbCPU, MaxRAM = MaxRAM,
                                     SelectedPCs = SelectedPCs)
 
+# To have the name of the PCs selected to map the spectral species in the filename 
+# run the function saved in the document map_spectral_sp_PC_naming.R to have in the 
+# global environment
+
+Kmeans_info <- map_spectral_species_ML(Input_Image_File = Input_Image_File,
+                                    Input_Mask_File = PCA_Output$MaskPath,
+                                    Output_Dir = Output_Dir,
+                                    SpectralSpace_Output = PCA_Output,
+                                    nbclusters = nbclusters,
+                                    nbCPU = nbCPU, MaxRAM = MaxRAM,
+                                    SelectedPCs = SelectedPCs)
+
 
 spectral_sp_map <- rast("~/data/biodivmapR_sent/RESULTS/sent_crop_envi/SPCA/SpectralSpecies/SpectralSpecies")
 spectral_sp_map <- rast("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi/SPCA/SpectralSpecies/SpectralSpecies")
 
 plot(spectral_sp_map$`Iter 2`, col=viridis_colors)
 
+PCs <- paste0(SelectedPCs, collapse = "")
+path <- file.path(Output_Dir, NameRaster, TypePCA, "SpectralSpecies", paste0("SpectralSpecies", PCs, collapse = ""))
+spectral_sp <- rast(path)
+plot(spectral_sp$`Iter 1`)
 # compute_spectral_species(PCA_Path = "biodivMapR_Example/03_RESULTS/S2A_T33NUD_20180104_Subset/SPCA/PCA/OutputPCA_8_PCs", 
 #                          Spectral_Species_Path ="biodivMapR_Example/03_RESULTS/S2A_T33NUD_20180104_Subset/SPCA/SpectralSpecies/SpectralSpecies2", 
 #                          Input_Mask_File = PCA_Output$MaskPath,
@@ -171,6 +188,8 @@ alpha_metric <- compute_alpha_metrics(
 )
 plot(alpha_metric$Shannon)
 
+path <- file.path(Output_Dir, NameRaster, TypePCA, "SpectralSpecies/SpectralSpecies_Distribution")
+spectral_sp_distribution <- rast(path)
 spectral_sp_distribution <- rast("~/data/biodivmapR_sent/RESULTS/sent_crop_envi/SPCA/alpha_metrics/SpectralSpecies_Distribution")
 plot(spectral_sp_distribution$SpectralSpecies_Distribution_6)
 shannon_map <- rast(alpha_metric$Shannon)
@@ -186,6 +205,7 @@ plot(fischer_map)
 print("MAP ALPHA DIVERSITY")
 Index_Alpha   = c('Shannon','Simpson')
 Index_Alpha   = c('Simpson')
+Index_Alpha   = c('Shannon')
 map_alpha_div(Input_Image_File = Input_Image_File,
               Output_Dir = Output_Dir,
               TypePCA = TypePCA,
@@ -194,6 +214,20 @@ map_alpha_div(Input_Image_File = Input_Image_File,
               MaxRAM = MaxRAM,
               Index_Alpha = Index_Alpha,
               nbclusters = nbclusters)
+
+# To have the name of the PCs selected to map the alpha diversity in the filename 
+# run the function saved in the document map_alpha_div_PC_naming.R to have it in the 
+# global environment
+
+map_alpha_div_ML(Input_Image_File = Input_Image_File,
+              Output_Dir = Output_Dir,
+              TypePCA = TypePCA,
+              window_size = window_size,
+              nbCPU = nbCPU,
+              MaxRAM = MaxRAM,
+              Index_Alpha = Index_Alpha,
+              nbclusters = nbclusters, SelectedPCs = SelectedPCs)
+
 
 path <- paste(Output_Dir, "/", NameRaster, "/SPCA/ALPHA/Shannon_", window_size, sep="")
 Shannon_map <- rast(path)
@@ -299,3 +333,86 @@ b <- ggplot() +
   # scale_fill_gradientn(colours = viridis_colors, na.value = na_col) +
   # labs(fill = substitute(paste("Shannon index", italic("H'"))))
 b  
+
+
+#######################################
+# Comparison
+#######################################
+Shannon_PC12 <- rast("~/data/biodivmapR_sent/RESULTS_PC_selection/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_10_PC12")
+Shannon_PC129 <- rast("~/data/biodivmapR_sent/RESULTS_PC_selection/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_10_PC129")
+Shannon_PC12789 <- rast("~/data/biodivmapR_sent/RESULTS_PC_selection/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_10_PC12789")
+par(mfrow=c(1,2))
+plot(Shannon_PC12)
+plot(Shannon_PC129)
+plot(Shannon_PC12789)
+par(mfrow=c(1,1))
+
+viridis_colors <- viridis::plasma(20)
+na_col <- grey(0.8, alpha=0.5)
+map_shannon_PC12 <- ggplot() +
+  geom_spatraster(data = Shannon_PC12, na.rm = TRUE, aes(fill=Shannon_10_PC12))+ #need to change the fill variable
+  # theme_map()+
+  theme_minimal()+
+  scale_fill_gradientn(colours = viridis_colors, na.value = na_col) +
+  labs(fill = substitute(paste("Shannon index", italic("H'"))))+
+  plot_annotation(
+    title = "Estimates of plant Shannon diversity index using PCs 1, 2",
+    theme = theme(plot.title = element_text(hjust=0.4, size = 16, face = "bold")))+
+  ggspatial::annotation_scale(location="bl", pad_x=unit(0.7, "in"),
+                              pad_y = unit(0.6, "in"), style="ticks", line_col="black", text_col="black")+
+  ggspatial::annotation_north_arrow(location="bl", which_north=T, pad_x=unit(0.7, "in"),
+                                    pad_y = unit(0.8, "in"), height = unit(0.6, "cm"), width=unit(0.6, "cm"))
+map_shannon_PC12  
+
+
+map_shannon_PC129 <- ggplot() +
+  geom_spatraster(data = Shannon_PC129, na.rm = TRUE, aes(fill=Shannon_10_PC129))+ #need to change the fill variable
+  # theme_map()+
+  theme_minimal()+
+  scale_fill_gradientn(colours = viridis_colors, na.value = na_col) +
+  labs(fill = substitute(paste("Shannon index", italic("H'"))))+
+  plot_annotation(
+    title = "Estimates of plant Shannon diversity index using PCs 1,2,9",
+    theme = theme(plot.title = element_text(hjust=0.4, size = 16, face = "bold")))+
+  ggspatial::annotation_scale(location="bl", pad_x=unit(0.7, "in"),
+                              pad_y = unit(0.6, "in"), style="ticks", line_col="black", text_col="black")+
+  ggspatial::annotation_north_arrow(location="bl", which_north=T, pad_x=unit(0.7, "in"),
+                                    pad_y = unit(0.8, "in"), height = unit(0.6, "cm"), width=unit(0.6, "cm"))
+map_shannon_PC129
+
+  
+cowplot::plot_grid(map_shannon_PC12, map_shannon_PC129, ncol = 2, align = "hv")
+# install.packages("spatialEco")
+library(spatialEco)
+# install.packages("SpatialPack")
+library(SpatialPack)
+corr_diff_PC <- raster.modified.ttest(Shannon_PC12, Shannon_PC129)
+plot(corr_diff_PC$corr, type="interval", breakby="cases")
+plot(corr_diff_PC$p.value)
+plot(corr_diff_PC$moran.x, type="interval", breakby="cases")
+plot(corr_diff_PC$moran.y, type="interval", breakby="cases")
+# writeRaster(corr_diff_PC, "~/data/biodivmapR_sent/RESULTS_PC_selection/sent_crop_envi_BIL/SPCA/ALPHA/correlation_PC12_PC129.envi")
+
+
+map_shannon_PC12789 <- ggplot() +
+  geom_spatraster(data = Shannon_PC12789, na.rm = TRUE, aes(fill=Shannon_10_PC12789))+ #need to change the fill variable
+  # theme_map()+
+  theme_minimal()+
+  scale_fill_gradientn(colours = viridis_colors, na.value = na_col) +
+  labs(fill = substitute(paste("Shannon index", italic("H'"))))+
+  plot_annotation(
+    title = "Estimates of plant Shannon diversity index using PCs 1,2,7,8,9",
+    theme = theme(plot.title = element_text(hjust=0.4, size = 16, face = "bold")))+
+  ggspatial::annotation_scale(location="bl", pad_x=unit(0.7, "in"),
+                              pad_y = unit(0.6, "in"), style="ticks", line_col="black", text_col="black")+
+  ggspatial::annotation_north_arrow(location="bl", which_north=T, pad_x=unit(0.7, "in"),
+                                    pad_y = unit(0.8, "in"), height = unit(0.6, "cm"), width=unit(0.6, "cm"))
+map_shannon_PC12789  
+cowplot::plot_grid(map_shannon_PC12, map_shannon_PC129, map_shannon_PC12789, ncol = 2, align = "hv")
+
+
+
+
+
+
+
