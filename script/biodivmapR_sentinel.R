@@ -14,8 +14,12 @@ library(biodivMapR)
 library(ggplot2)
 library(cowplot)
 ################################################################################
-Datadir <- "~/data/biodivmapR_sent"
-NameRaster <- "sent_crop_envi"
+# sent <- rast("~/data/biodivmapR_sent/sent_crop_envi")
+# writeRaster(sent, filename = "~/data/biodivmapR_sent/sent_crop_envi_BIL", filetype="ENVI", gdal=c("INTERLEAVE=BIL"), overwrite=T)
+
+################################################################################
+Datadir <- "~/data/biodivmapR_sent/"
+NameRaster <- "sent_crop_envi_BIL"
 # Define path for image file to be processed
 Input_Image_File <- file.path(Datadir,NameRaster)
 # Define path for corresponding mask file
@@ -38,10 +42,10 @@ TypePCA <- 'SPCA'
 # Automatically set to FALSE if TypePCA     = 'MNF'
 FilterPCA <- F
 # window size forcomputation of spectral diversity
-window_size <- 10
+window_size <-10
 # # computational parameters
-nbCPU <- 4
-MaxRAM <- 4
+nbCPU <- 2
+MaxRAM <- 12
 # number of clusters (spectral species)
 nbclusters <- 50
 nbclusters <- 20
@@ -119,7 +123,7 @@ Sel_PC <- select_PCA_components(Input_Image_File = Input_Image_File,
                                 File_Open = TRUE)
 
 
-SelectedPCs = c(1,2,6,9)
+SelectedPCs = c(1,2,8,9)
 
 ################################################################################
 ##                  Perform Spectral species mapping                          ##
@@ -137,7 +141,7 @@ Kmeans_info <- map_spectral_species(Input_Image_File = Input_Image_File,
 
 
 spectral_sp_map <- rast("~/data/biodivmapR_sent/RESULTS/sent_crop_envi/SPCA/SpectralSpecies/SpectralSpecies")
-spectral_sp_map <- rast("~/data/biodivmapR_sent/RESULTS_cluster_20//sent_crop_envi/SPCA/SpectralSpecies/SpectralSpecies")
+spectral_sp_map <- rast("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi/SPCA/SpectralSpecies/SpectralSpecies")
 
 plot(spectral_sp_map$`Iter 2`, col=viridis_colors)
 
@@ -191,8 +195,10 @@ map_alpha_div(Input_Image_File = Input_Image_File,
               Index_Alpha = Index_Alpha,
               nbclusters = nbclusters)
 
-Shannon_map <- rast("~/data/biodivmapR_sent/RESULTS/sent_crop_envi/SPCA/ALPHA/Shannon_10")
-Shannon_map <- rast("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi/SPCA/ALPHA/Shannon_10")
+path <- paste(Output_Dir, "/", NameRaster, "/SPCA/ALPHA/Shannon_", window_size, sep="")
+Shannon_map <- rast(path)
+# Shannon_map <- rast("~/data/biodivmapR_sent/RESULTS/sent_crop_envi/SPCA/ALPHA/Shannon_10")
+# Shannon_map <- rast("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_10")
 par(mfrow=c(1,2))
 plot(Shannon_map)
 plot(shannon_map)
@@ -210,14 +216,14 @@ shannon_mean_map <- rast("~/data/biodivmapR_sent/RESULTS/sent_crop_envi/SPCA/ALP
 viridis_colors <- viridis::plasma(20)
 na_col <- grey(0.8, alpha=0.5)
 m <- ggplot() +
-  geom_spatraster(data = Shannon_map, na.rm = TRUE, aes(fill=Shannon_10))+
+  geom_spatraster(data = Shannon_map, na.rm = TRUE, aes(fill=Shannon_30))+ #need to change the fill variable
   # theme_map()+
   theme_minimal()+
   scale_fill_gradientn(colours = viridis_colors, na.value = na_col) +
   labs(fill = substitute(paste("Shannon index", italic("H'"))))
 m  
 
-m+
+map_div <- m+
   ggspatial::annotation_north_arrow(
     location = "bl", which_north = "true",
     pad_x = unit(0.5, "in"), pad_y = unit(0.65, "in"),
@@ -240,7 +246,7 @@ s <- ggplot() +
   theme_minimal()
 s
 
-s+
+map_truecol <- s+
   ggspatial::annotation_scale(location="bl", pad_x=unit(0.5, "in"),
   pad_y = unit(0.4, "in"), style="ticks", line_col="white", text_col="white")+
   
@@ -248,12 +254,7 @@ s+
   pad_y = unit(0.4, "in"), height = unit(0.6, "cm"), width=unit(0.6, "cm"))
 
 
-
-
-
-
-
-
+cowplot::plot_grid(map_div, map_truecol, ncol = 2, align = "hv")
 
 
 scale_fill_gradientn(colours = terrain.colors(10))
@@ -272,3 +273,29 @@ par(mfrow=c(1,2))
 col=c("black", col_vector[2:n])
 plot(Ss$`Iter 4`, col=col)
 plot(Ss$`Iter 5`, col=col)
+
+######################
+# Beta diversity map
+######################
+print("MAP BETA DIVERSITY")
+map_beta_div(Input_Image_File = Input_Image_File, 
+             Output_Dir = Output_Dir, 
+             TypePCA = TypePCA,
+             window_size = window_size, 
+             nbCPU = nbCPU, 
+             MaxRAM = MaxRAM,
+             nbclusters = nbclusters)
+
+window_size <- 30
+path <- paste(Output_Dir, "/", NameRaster, "/SPCA/BETA/BetaDiversity_BCdiss_PCO_", window_size, sep="")
+Beta_map <- rast(path)
+Beta_map_10 <- rast(path)
+plotRGB(Beta_map, r=1, g=2, b=3, stretch="lin")
+
+b <- ggplot() +
+  geom_spatraster_rgb(data = Beta_map, r=1, g=2, b=3, interpolate = T)+
+  # theme_map()+
+  theme_minimal()
+  # scale_fill_gradientn(colours = viridis_colors, na.value = na_col) +
+  # labs(fill = substitute(paste("Shannon index", italic("H'"))))
+b  
