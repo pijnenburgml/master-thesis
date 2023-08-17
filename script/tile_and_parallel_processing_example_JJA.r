@@ -44,14 +44,6 @@ target_area <- data.frame(x = c(476480, 517470, 517470, 476480), #this is the Se
 plotRGB(sent_aoi_stack_crop, r=3, g=2, b=1, scale=10000, stretch="lin")
 plot(target_area, add=T, col="red")
 
-# # Generate an arbitary area of interest on Victoria Island
-# target_area <- data.frame(x = c(468416, 468416 + 12600, 468416  + 12600, 468416),
-#         y = c(7674690, 7674690, 7674690 + 12600, 7674690 + 12600 )) %>%
-#             st_as_sf(
-#                 coords = c("x", "y"),
-#                 crs = 32613 # UTM Zone 12 -> so coordiantes are in metres
-#             ) %>% summarize() %>%
-#             st_convex_hull()
 
 # Visualise the polygon to check everything worked
 ggplot() +
@@ -127,7 +119,8 @@ ggplot() +
 #Save the tile boundaries as shapefile 
 # st_write(grid_polygons, "~/data/output/tilling/grid_polygons_aoi.shp")
 # st_write(grid_polygons, "~/data/output/tilling/grid_polygons_aviris.shp")
-
+grid_polygons <- st_read("~/data/output/tilling/grid_polygons_aoi.shp")
+# grid_polygons <- st_read("~/data/output/tilling/grid_polygons_aviris.shp")
 ##############################################################
 
 ###################
@@ -140,36 +133,14 @@ try <- st_read("~/data/Aviris_data/boundaries/ang20190801t143347_outline_KML.kml
 try_proj <- st_transform(try,32613)
 st_intersects(grid_polygons[1,], try_proj$geometry)
 
-#plot enablling to tell which tile cell overlap with a flight stip (here 3347 --> try_proj)
+#plot enabling to tell which tile cell overlap with a flight stripe (here 3347 = try_proj)
 ggplot(data=grid_polygons) +
   geom_sf(
     # aes(fill = cell_id, alpha=0.1)
   ) +
   geom_sf_label(aes(label=cell_id), cex=0.8)+
-  geom_sf(data=try_proj, aes(fill="red"))
+  geom_sf(data=boundaries_multipolygon, aes(fill="red", alpha=0.1))
 st_intersects(grid_polygons[grep(pattern="x_1_y_17", grid_polygons$cell_id),], try_proj)
-
-########
-# Try to apply gdal warp to get a piece of fligth strip rectified I could run the random forest on
-########
-
-# try <- st_read("~/data/Aviris_data/boundaries/ang20190801t160747_outline_KML.kml")
-# try_proj <- st_transform(try,32613)
-# ggplot(data=grid_polygons) +
-#   geom_sf(
-#     # aes(fill = cell_id, alpha=0.1)
-#   ) +
-#   geom_sf_label(aes(label=cell_id), cex=0.8)+
-#   geom_sf(data=try_proj, aes(fill="red"))
-# 
-# # x_35_y_17
-# source_path <-"~/scratch/reflectance_data/ang20190801t160747_rfl" 
-# tile_path <- "~/data/output/tilling/grid_polygons_aoi.shp"
-# filter(grid_polygons, cell_id=="x_35_y_17") %>% st_write("~/data/output/tilling/grid_polygons_x_35_y_17.shp")
-# tile_path <- "~/data/output/tilling/grid_polygons_x_35_y_17.shp"
-# out_file <- paste0(tempfile(), ".hdr")
-# 
-# sf::gdal_utils(util="warp", source=source_path, destination=out_file, options=c("cutline", tile_path, "of", "ENVI"))
 
 ######################
 # make multipolygon from all the flight strip boundaries
@@ -199,6 +170,29 @@ boundaries_multipolygon <- c(boundaries_sf[[1]]$geometry, boundaries_sf[[2]]$geo
 plot(boundaries_multipolygon)
 names(boundaries_multipolygon) <- boundaries_name
 
+
+########
+# Try to apply gdal warp to get a piece of flight strip rectified I could run the random forest on
+########
+bbox <- filter(grid_polygons, cell_id=="x_35_y_17") %>% st_bbox()
+source_path <-"/scratch/mpijne/reflectance_data/ang20190801t160747_rfl"
+sf::gdal_utils("warp",
+               source = source_path, 
+               destination = paste0(source_path, "_x_35_y_17"),
+               options = c(
+                 # outpufile = ENVI file
+                 "-of", "ENVI",
+                 "-t_srs", "epsg:32613",
+                 # target extent (in target crs)
+                 "-te",
+                 bbox[1], # xmin
+                 bbox[2], # ymin
+                 bbox[3], # xmax
+                 bbox[4] # ymax
+               )
+)
+
+
 ###############
 # Using everything for parallel processing
 ###############
@@ -218,51 +212,79 @@ clusterExport(cl, c("grid_polygons", "boundaries_multipolygon"))
 # then run things in parallel 
 pblapply(grid_polygons$cell_id,
          function(cell) {
-           idx <- which(st_intersects(boundaries_multipolygon, filter(grid_polygons, cell_id==cell), sparse = F)==T)
-           file <- names(boundaries_multipolygon[idx])
-           if (length(file)>0) {
-             idx_file <- list.files("~/data/Aviris_data/boundaries/") %>% grep(pattern=paste(substr(file,0,18),collapse="|")) #to be change to real file folder and not boundaries
-             crop_rasters <- list()
-             for (x in idx_file) {
-                y <- rast(paste("~/data/Aviris_data/boundaries/", list.files("~/data/Aviris_data/boundaries/")[x], sep="")) # might need to be changed into an sf::gdal function 
-                crop_rasters[match(x, idx_file)]<-crop(y, ext(filter(grid_polygons, cell_id==cell)))
-              }
-             mosaic(crop_rasters) %>%  writeRaster(filename = cell)#Need to write the mosaic tiled there?
+           file <- names(boundaries_multipolygon)[which(st_intersects(boundaries_multipolygon, filter(grid_polygons, cell_id==cell), sparse = F)==T)]
+           paths <- paste0("/scratch/mpijne/reflectance_data/", substr(file, 0, 18), "_rfl")
+           bbox <- filter(grid_polygons, cell_id==cell) %>% st_bbox()
+           if (length(file)>0) { #need a loop or an apply
+             for (x in paths) {
+             sf::gdal_utils("warp",
+                            source = x, 
+                            destination = paste(x, cell, sep="_"),
+                            options = c(
+                              # outpufile = ENVI file
+                              "-of", "ENVI",
+                              "-t_srs", "epsg:32613",
+                              # target extent (in target crs)
+                              "-te",
+                              bbox[1], # xmin
+                              bbox[2], # ymin
+                              bbox[3], # xmax
+                              bbox[4] # ymax
+                              )
+                            ) 
+             }
+             update_paths <- paste(paths, cell, sep="_") 
+             sf::gdal_utils("warp", source = update_paths, destination = paste0("/scratch/mpijne/reflectance_data/", cell),
+                            options = c("-of", "ENVI", "-t_srs", "epsg:32613"))
            }
-         },
+         }
          cl = cl # the name of your cluster
 )
 
-idx <- which(st_intersects(boundaries_multipolygon, filter(grid_polygons, cell_id=="x_40_y_30"), sparse = F)==T)
-file <- names(boundaries_multipolygon[idx])
+# check if trial with test file worked: 
+tile1 <- rast("/scratch/mpijne/reflectance_data/ang20190801t143347_rfl_x_10_y_14")
+tile2 <- rast("/scratch/mpijne/reflectance_data/ang20190801t144718_rfl_x_10_y_14")
+plotRGB(tile1, r=54, g=36, b=20, stretch="lin", colNA="red")
+plotRGB(tile2, r=54, g=36, b=20, stretch="lin", colNA="red")
+tile_x10y14 <- rast("/scratch/mpijne/reflectance_data/x_10_y_14")
+plotRGB(tile_x10y14, r=54, g=36, b=20, stretch="lin")
 
-plot(boundaries_multipolygon[idx], add=T, col="orange", alpha=0.1)
-plot(filter(grid_polygons, cell_id=="x_40_y_30"), add=T, col="red")
-plot(boundaries_multipolygon, add=T, col="grey")
+# comparison with mosaic not possible because different resolution
+# tile_x10y14 <- mosaic(tile1, tile2)
+# writeRaster(tile_x35y17, "/scratch/mpijne/reflectance_data/x_35_y_17_comparison.envi")
 
-if (length(file)>0) {
-  idx_file <- list.files("~/data/Aviris_data/boundaries/") %>% grep(pattern=paste(substr(file,0,18),collapse="|")) #to be change to real file folder and not boundaries
-  paste("~/data/Aviris_data/boundaries/", list.files("~/data/Aviris_data/boundaries/")[idx_file], sep="")
-    for (x in idx_file) {
-      y <- rast(paste("~/data/Aviris_data/boundaries/", list.files("~/data/Aviris_data/boundaries/")[x], sep=""))
-      crop(y, ext(filter(grid_polygons, cell_id==cell_id)))
-  }
-}
+#######
+# Masking Aviris data in R
+#######
 
-# lapply(idx_file, FUN=function(x){y <- rast(paste("~/data/Aviris_data/boundaries/", list.files("~/data/Aviris_data/boundaries/")[x], sep=""))
-#                                                   crop(y, ext(filter(grid_polygons, cell_id==cell)))})
+# Clouds
+
+RF_model <- randomForest(x=training_data[,2:426], y=training_data$ID)
+pix_class <- terra::predict(object=tile_x10y14, model=RF_model)
 
 
-rectified_data <- rast("./Aviris_data/strip_3328_cropped_rect.envi")
-ggplot(data=grid_polygons) +
-  geom_sf(
-    # aes(fill = cell_id, alpha=0.1)
-  ) +
-  geom_sf_label(aes(label=cell_id), cex=0.8)+
-  geom_spatraster_contour_filled(data=rectified_data$`376.719576 Nanometers`, aes(fill="red"))
+# Shade
+strip_4159_crop <- rast("./Aviris_data/strip_4159_cropped_2_rect")
+NIR_idx <- names(strip_4159_crop) %>% grep(pattern="^8")
+NIR_average <- mean(strip_4159_crop[[NIR_idx]])
+hist(NIR_average, breaks=seq(0,0.35, by=0.01))
+# cut hard decision, at 0.1 can make sense but less as well, something like 0.05 could also be justifiable.  
+shade_mask <- ifel(NIR_average<0.05, 0, 1)
+plot(shade_mask)
+# NDWI
+green_idx <- names(strip_4159_crop) %>% grep(pattern="^5")
+green_average <- mean(strip_4159_crop[[green_idx]])
+NDWI <- (green_average-NIR_average)/(green_average+NIR_average)
+plot(NDWI)
+hist(NDWI)
+water_mask <- ifel(NDWI>0.1, 0, 1)
+plot(water_mask)
+par(mfrow=c(1,2))
+plot(shade_mask)
+plot(water_mask)
+plotRGB(strip_4159_crop, r=names(strip_4159_crop)[54], g=names(strip_4159_crop)[36], b=names(strip_4159_crop)[20], stretch="lin")
 
-crop(rectified_data, ext(filter(grid_polygons, cell_id=="x_19_y_23")))
-# working
+
 
 ###############
 # Code from Jakob
@@ -324,58 +346,26 @@ stopCluster(cl)
 
 # Hope this helps!
 
-#######
-# Masking Aviris data in R
-#######
-
-# Clouds
-RF_model <- randomForest(x=training_data[,2:426], y=training_data$ID)
-pix_class <- terra::predict(object=tile, model=RF_model)
-
-
-# Shade
-strip_4159_crop <- rast("./Aviris_data/strip_4159_cropped_2_rect")
-NIR_idx <- names(strip_4159_crop) %>% grep(pattern="^8")
-NIR_average <- mean(strip_4159_crop[[NIR_idx]])
-hist(NIR_average, breaks=seq(0,0.35, by=0.01))
-# cut hard decision, at 0.1 can make sense but less as well, something like 0.05 could also be justifiable.  
-shade_mask <- ifel(NIR_average<0.05, 0, 1)
-plot(shade_mask)
-# NDWI
-green_idx <- names(strip_4159_crop) %>% grep(pattern="^5")
-green_average <- mean(strip_4159_crop[[green_idx]])
-NDWI <- (green_average-NIR_average)/(green_average+NIR_average)
-plot(NDWI)
-hist(NDWI)
-water_mask <- ifel(NDWI>0.1, 0, 1)
-plot(water_mask)
-par(mfrow=c(1,2))
-plot(shade_mask)
-plot(water_mask)
-plotRGB(strip_4159_crop, r=names(strip_4159_crop)[54], g=names(strip_4159_crop)[36], b=names(strip_4159_crop)[20], stretch="lin")
-
-
-
 ############
 # Rectify/rotate data tryout
 ############
-rotated_data <- rast("./Aviris_data/strip_3328_cropped_rotated_2")
-plot()
-plot(ext(rotated_data))
-
-plot(ext(sent_aoi_stack_crop))
-plot(ext(rotated_data), add=T)
-plotRGB(rotated_data, r=names(rotated_data)[54], g=names(rotated_data)[36], b=names(rotated_data)[20], stretch="lin", add=T)
-rectified_data <- rast("./Aviris_data/strip_3328_cropped_rect.envi")
-plot(ext(rectified_data), add=T)
-plotRGB(rectified_data, r=names(rectified_data)[54], g=names(rectified_data)[36], b=names(rectified_data)[20], stretch="lin", add=T)
-
-rotated_data <- rast("./Aviris_data/strip_4159_cropped_2_rotated.dat")
-rectified_data <- rast("./Aviris_data/strip_4159_cropped_2_rect")
+# rotated_data <- rast("./Aviris_data/strip_3328_cropped_rotated_2")
+# plot()
+# plot(ext(rotated_data))
+# 
 # plot(ext(sent_aoi_stack_crop))
-plot(ext(rotated_data), add=T)
-plot(ext(rectified_data), add=T)
-
+# plot(ext(rotated_data), add=T)
+# plotRGB(rotated_data, r=names(rotated_data)[54], g=names(rotated_data)[36], b=names(rotated_data)[20], stretch="lin", add=T)
+# rectified_data <- rast("./Aviris_data/strip_3328_cropped_rect.envi")
+# plot(ext(rectified_data), add=T)
+# plotRGB(rectified_data, r=names(rectified_data)[54], g=names(rectified_data)[36], b=names(rectified_data)[20], stretch="lin", add=T)
+# 
+# rotated_data <- rast("./Aviris_data/strip_4159_cropped_2_rotated.dat")
+# rectified_data <- rast("./Aviris_data/strip_4159_cropped_2_rect")
+# # plot(ext(sent_aoi_stack_crop))
+# plot(ext(rotated_data), add=T)
+# plot(ext(rectified_data), add=T)
+# 
 
 
 
