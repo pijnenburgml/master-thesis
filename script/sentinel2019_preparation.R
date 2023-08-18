@@ -214,12 +214,12 @@ crs(sep_poly_vect) <- crs(sent_aoi_stack_crop)
 plotRGB(sent_aoi_stack_crop, r=3, g=2, b=1, scale=10000, stretch="lin")
 plot(sep_poly_vect, add=T, col="green")
 
-mask_below <- mask(sent_aoi_stack_crop, sep_poly_vect, inverse=T, updatevalue=0)
+mask_below <- mask(sent_aoi_stack_crop, sep_poly_vect, inverse=F, updatevalue=0)
 plot(mask_below)
-mask_below_try <- ifel(mask_below!=0, NA, 0)
+mask_below_try <- ifel(mask_below!=0, 0, 1)
 plotRGB(sent_aoi_stack_crop, r=3, g=2, b=1, scale=10000, stretch="lin")
 plot(mask_below_try["T13WDS_20190727T185929_B02_10m"], add=T)
-
+# writeRaster(mask_below_try$T13WDS_20190727T185929_B02_10m, filename = "~/data/output/build_are_mask.tif", overwrite=T)
 ########
 # make only 1 mask file out of the several I have
 ########
