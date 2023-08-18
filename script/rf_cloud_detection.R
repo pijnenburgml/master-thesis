@@ -9,7 +9,6 @@ library(gdalUtils)
 library(sf)
 library(exactextractr)
 
-
 bg <- vect("~/scratch/data_rf_cloud_mask/strip_4159_background_annotation.shp")
 plot(bg)
 clouds <- vect("~/scratch/data_rf_cloud_mask/strip_4159_cloud_annotation.shp")
@@ -55,8 +54,6 @@ validation_data <- validation_data %>%
   mutate_at(vars(-1), ~ as.numeric(.))
 class(validation_data[,2])
 colnames(validation_data)[2:426] <- 1:425
-
-
 training_data <- as.data.frame(t(training_data))
 training_data$ID <- as.factor(training_data$ID)
 training_data <- training_data %>%
@@ -64,59 +61,36 @@ training_data <- training_data %>%
 class(training_data[,2])
 colnames(training_data)[2:426] <- 1:425
 RF_model <- randomForest(x=training_data[,2:426], y=training_data$ID)
+save(RF_model,file = "~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData")
+
+load("~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData")
 pred_test <- predict(RF_model, newdata = validation_data, type= "class")
 table(pred_test, validation_data$ID)  
 
-# strip_4159_small_RF_path <- "~/scratch/data_rf_cloud_mask/stip_4159_small_RF.hdr"
-# cloud_pix <- "~/scratch/data_rf_cloud_mask/cloud_pix_gdal.hdr"
-# sf::gdal_utils(util="warp",
-#                source= strip_4159_small_RF_path,
-#                destination= cloud_pix,
-#                options=c("cutline",  clouds_path, "of", "ENVI"))
-# # GDAL Error 1: Cannot guess driver for ~/scratch/data_rf_cloud_mask/cloud_pix_gdal.ENVI
-# 
-# sf::gdal_utils(util="warp",
-#                source= strip_4159_small_RF_path,
-#                destination= cloud_pix,
-#                options=c("cutline",  clouds_path))
-# 
-# # "crop to cutline"
-# 
-# 
-# gdalwarp(srcfile = strip_4159_small_RF_path,
-#                dstfile = cloud_pix, cutline = clouds_path)
-# 
-# gdal_cmd <- sprintf("gdalwarp -cutline %s", clouds_path, strip_4159_small_RF_path, cloud_pix)
-# 
-# 
-# -cutline <datasource>
+# strip_4159_small_RF_rect <- rectify(strip_4159_small_RF)
+# writeRaster(strip_4159_small_RF_rect, filename = "strip_4159_small_RF_rect.envi")
 
-strip_4159_small_RF_rect <- rectify(strip_4159_small_RF)
-writeRaster(strip_4159_small_RF_rect, filename = "strip_4159_small_RF_rect.envi")
-
-strip_4159_half1 <- rast("~/scratch/data_rf_cloud_mask/strip_4159_half_1")
-cloud_pix <- terra::extract(strip_4159_small_RF_rect, clouds)
-strip_4159_half1 <- rectify(strip_4159_half1)
-strip_4159_half2<- rast("strip_4159_half_2")
-strip_4159_half2<- rectify(strip_4159_half2)
-strip_4159 <- mosaic(strip_4159_half1, strip_4159_half2)
-writeRaster(strip_4159_small_RF, filename ="strip_4159_small_RF_rect.envi")
-
-cloud_pix <- extract(x=strip_4159_small_RF, y=clouds) %>% sample(size=10000, replace=F)
-bg_pix <- extract(x=strip_4159, y=bg) %>% sample(size=10000, replace=F)
-
-cloud_pix_half2 <- extract(x=)
-bg_pix_half2 <- extract()
+# strip_4159_half1 <- rast("~/scratch/data_rf_cloud_mask/strip_4159_half_1")
+# cloud_pix <- terra::extract(strip_4159_small_RF_rect, clouds)
+# strip_4159_half1 <- rectify(strip_4159_half1)
+# strip_4159_half2<- rast("strip_4159_half_2")
+# strip_4159_half2<- rectify(strip_4159_half2)
+# strip_4159 <- mosaic(strip_4159_half1, strip_4159_half2)
+# writeRaster(strip_4159_small_RF, filename ="strip_4159_small_RF_rect.envi")
+# cloud_pix <- extract(x=strip_4159_small_RF, y=clouds) %>% sample(size=10000, replace=F)
+# bg_pix <- extract(x=strip_4159, y=bg) %>% sample(size=10000, replace=F)
 
 ##########################
 # Apply the random forest on another fligth strip 
 ##########################
 
-strip_0747 <- rast("~/scratch/reflectance_data/ang20190801t160747_rfl")
-strip_0747_cloud_class <- terra::predict(strip_0747, model=RF_model)
-
-
-
+tile_x10y14 <- rast("~/scratch/reflectance_data/x_10_y_14")
+names(tile_x10y14) <- 1:425
+x10y14_cloud_class <- terra::predict(tile_x10y14, model=RF_model)
+plot(x10y14_cloud_class)
+par(mfrow=c(1,2))
+plotRGB(tile_x10y14, r=54, g=36, b=20, stretch="lin")
+plot(x10y14_cloud_class)
 
 
 
