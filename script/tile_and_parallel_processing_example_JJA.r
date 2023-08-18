@@ -126,7 +126,6 @@ grid_polygons <- st_read("~/data/output/tilling/grid_polygons_aoi.shp")
 ###################
 # Get the fligth stripe boundaries
 ###################
-
 boundary_dir <- "~/data/Aviris_data/boundaries"
 boundaries <- list.files(path=boundary_dir, pattern="KML", full.names = T)
 try <- st_read("~/data/Aviris_data/boundaries/ang20190801t143347_outline_KML.kml")
@@ -174,7 +173,7 @@ names(boundaries_multipolygon) <- boundaries_name
 ########
 # Try to apply gdal warp to get a piece of flight strip rectified I could run the random forest on
 ########
-bbox <- filter(grid_polygons, cell_id=="x_35_y_17") %>% st_bbox()
+bbox <- dplyr::filter(grid_polygons, cell_id=="x_35_y_17") %>% st_bbox()
 source_path <-"/scratch/mpijne/reflectance_data/ang20190801t160747_rfl"
 sf::gdal_utils("warp",
                source = source_path, 
@@ -194,27 +193,17 @@ sf::gdal_utils("warp",
 
 
 ###############
-# Using everything for parallel processing
+# Using everything for parallel processing (on li)
 ###############
 
-cl <- makeCluster(2)
-
-# then load any libraries you might need on the cluster
-clusterEvalQ(cl, {
-  library(sf)
-  library(dplyr)
-  library(terra)
-})
-
-# and export any variables you need
-clusterExport(cl, c("grid_polygons", "boundaries_multipolygon"))
+cl <- 2 # change with the number of cluster 
 
 # then run things in parallel 
 pblapply(grid_polygons$cell_id,
          function(cell) {
-           file <- names(boundaries_multipolygon)[which(st_intersects(boundaries_multipolygon, filter(grid_polygons, cell_id==cell), sparse = F)==T)]
+           file <- names(boundaries_multipolygon)[which(st_intersects(boundaries_multipolygon, dplyr::filter(grid_polygons, cell_id==cell), sparse = F)==T)]
            paths <- paste0("/scratch/mpijne/reflectance_data/", substr(file, 0, 18), "_rfl")
-           bbox <- filter(grid_polygons, cell_id==cell) %>% st_bbox()
+           bbox <- dplyr::filter(grid_polygons, cell_id==cell) %>% st_bbox()
            if (length(file)>0) { #need a loop or an apply
              for (x in paths) {
              sf::gdal_utils("warp",
@@ -235,7 +224,7 @@ pblapply(grid_polygons$cell_id,
              }
              update_paths <- paste(paths, cell, sep="_") 
              sf::gdal_utils("warp", source = update_paths, destination = paste0("/scratch/mpijne/reflectance_data/", cell),
-                            options = c("-of", "ENVI", "-t_srs", "epsg:32613"))
+                            options = c("-of", "ENVI", "-t_srs", "epsg:32613",  "-co", "INTERLEAVE=BIL"))
            }
          }
          cl = cl # the name of your cluster
@@ -258,10 +247,8 @@ plotRGB(tile_x10y14, r=54, g=36, b=20, stretch="lin")
 #######
 
 # Clouds
-
 RF_model <- randomForest(x=training_data[,2:426], y=training_data$ID)
 pix_class <- terra::predict(object=tile_x10y14, model=RF_model)
-
 
 # Shade
 strip_4159_crop <- rast("./Aviris_data/strip_4159_cropped_2_rect")
@@ -283,6 +270,31 @@ par(mfrow=c(1,2))
 plot(shade_mask)
 plot(water_mask)
 plotRGB(strip_4159_crop, r=names(strip_4159_crop)[54], g=names(strip_4159_crop)[36], b=names(strip_4159_crop)[20], stretch="lin")
+
+RF_model_try <- get(load("~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData"))
+build_area_mask <- rast("~/data/output/build_are_mask.tif")
+temp_rast <- rast(ext(sent_aoi_stack_crop), resolution = 5)
+build_area_mask_5res <- resample(building_mask, temp_rast, method="near")
+
+pblapply(grid_polygons$cell_id,
+         function(cell) {
+           tile <- rast(file.path("/scratch/mpijne/reflectance_data", cell))
+           NIR_average <- mean(tile[[grep(names(tile), pattern = "^8")]])
+           # hist(NIR_average, breaks=seq(terra::minmax(NIR_average)[1],terra::minmax(NIR_average)[2]+0.05, by=0.01))
+           shade_mask <- ifel(NIR_average<0.05, 0, 1)
+           green_average <- mean(tile[[grep(names(tile), pattern="^5")]])
+           NDWI <- (green_average-NIR_average)/(green_average+NIR_average)
+           water_mask <- ifel(NDWI>0.1, 0, 1)
+           names(tile) <- 1:425
+           cloud_class <- terra::predict(object=tile, model=RF_model)
+           cloud_mask <- ifel(cloud_class=="cl", 0, 1)
+           building_mask <- crop(build_area_mask_5res, tile)
+           mask <- mosaic(shade_mask, water_mask, cloud_mask, building_mask, fun="min")
+           # mask <- ifel(mask==0, NA, 1) #is it necessary?
+           writeRaster(mask, filename = paste("/scratch/mpijne/reflectance_data/", cell, "_mask", sep=""),filetype="ENVI", gdal="INTERLEAVE=BSQ", overwrite=T, datatype="INT1U")
+                         }
+         cl = cl # the name of your cluster
+)
 
 
 
