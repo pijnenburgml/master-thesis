@@ -29,7 +29,7 @@ NameMask <- "mask_sent2_final_NA"
 Input_Mask_File <- file.path(Datadir, NameMask)
 # Input_Mask_File <- F
 # Define path for master output directory where files produced during the process are saved
-Output_Dir <- '~/data/biodivmapR_sent/RESULTS'
+Output_Dir <- '~/data/biodivmapR_sent/RESULTS_cluster_50'
 Output_Dir <- '~/data/biodivmapR_sent/RESULTS_cluster_20'
 Output_Dir <- "~/data/biodivmapR_sent/RESULTS_PC_selection"
 # dir.create(path = Output_Dir,recursive = T,showWarnings = F)
@@ -48,7 +48,7 @@ FilterPCA <- F
 window_size <-10
 # # computational parameters
 nbCPU <- 2
-MaxRAM <- 10
+MaxRAM <- 6
 # number of clusters (spectral species)
 nbclusters <- 50
 nbclusters <- 20
@@ -78,6 +78,8 @@ PCA_Output <- perform_PCA(Input_Image_File = Input_Image_File,
                           Continuum_Removal = Continuum_Removal,
                           nbCPU = nbCPU,
                           MaxRAM = MaxRAM)
+# save(PCA_Output, file="~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/PCA/PCA_Output.RData")
+PCA_Output <- get(load("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/PCA/PCA_Output.RData"))
 
 # path for the updated mask
 Input_Mask_File <- PCA_Output$MaskPath
@@ -124,7 +126,7 @@ Sel_PC <- select_PCA_components(Input_Image_File = Input_Image_File,
                                 File_Open = TRUE)
 
 
-SelectedPCs = c(1,2,7,8,9)
+SelectedPCs = c(1,2,7,8)
 
 ################################################################################
 ##                  Perform Spectral species mapping                          ##
@@ -139,6 +141,8 @@ Kmeans_info <- map_spectral_species(Input_Image_File = Input_Image_File,
                                     nbclusters = nbclusters,
                                     nbCPU = nbCPU, MaxRAM = MaxRAM,
                                     SelectedPCs = SelectedPCs)
+# save(Kmeans_info, file="~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info_PC12.Rdata")
+Kmeans_info <- get(load("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info.Rdata"))
 
 # To have the name of the PCs selected to map the spectral species in the filename 
 # run the function saved in the document map_spectral_sp_PC_naming.R to have in the 
@@ -151,6 +155,8 @@ Kmeans_info <- map_spectral_species_ML(Input_Image_File = Input_Image_File,
                                     nbclusters = nbclusters,
                                     nbCPU = nbCPU, MaxRAM = MaxRAM,
                                     SelectedPCs = SelectedPCs)
+# save(Kmeans_info, file="~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info_PC1278.Rdata")
+Kmeans_info <- get(load("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info_PC1278.Rdata"))
 
 
 spectral_sp_map <- rast("~/data/biodivmapR_sent/RESULTS/sent_crop_envi/SPCA/SpectralSpecies/SpectralSpecies")
@@ -392,6 +398,9 @@ plot(corr_diff_PC$p.value)
 plot(corr_diff_PC$moran.x, type="interval", breakby="cases")
 plot(corr_diff_PC$moran.y, type="interval", breakby="cases")
 # writeRaster(corr_diff_PC, "~/data/biodivmapR_sent/RESULTS_PC_selection/sent_crop_envi_BIL/SPCA/ALPHA/correlation_PC12_PC129.envi")
+corr_diff_PC <- rast("~/data/biodivmapR_sent/RESULTS_PC_selection/sent_crop_envi_BIL/SPCA/ALPHA/correlation_PC12_PC129.envi")
+terra::plot(corr_diff_PC$corr, col=viridis_colors, type="continuous")
+plot(corr_diff_PC$corr, type="interval", breakby="cases", main="correlation between Shannon index produced with PC 1,2 and PC 1,2,9")
 
 
 map_shannon_PC12789 <- ggplot() +
@@ -409,6 +418,37 @@ map_shannon_PC12789 <- ggplot() +
                                     pad_y = unit(0.8, "in"), height = unit(0.6, "cm"), width=unit(0.6, "cm"))
 map_shannon_PC12789  
 cowplot::plot_grid(map_shannon_PC12, map_shannon_PC129, map_shannon_PC12789, ncol = 2, align = "hv")
+cowplot::plot_grid(map_shannon_PC12, map_shannon_PC12789, ncol = 2, align = "hv")
+
+
+
+corr_diff_PC_12_12789 <- raster.modified.ttest(Shannon_PC12, Shannon_PC12789)
+# writeRaster(corr_diff_PC_12_12789, "~/data/biodivmapR_sent/RESULTS_PC_selection/sent_crop_envi_BIL/SPCA/ALPHA/correlation_PC12_PC12789.envi")
+corr_diff_PC_12_12789 <- rast("~/data/biodivmapR_sent/RESULTS_PC_selection/sent_crop_envi_BIL/SPCA/ALPHA/correlation_PC12_PC12789.envi")
+plot(corr_diff_PC_12_12789$corr, type="interval", breakby="eqint", main="correlation between Shannon index produced with PC 1,2 and PC 1,2,7,8,9", col=viridis_colors)
+plot(corr_diff_PC_12_12789$corr, type="interval", breaks=c(-1,-0.5,-0.1,0.1,0.5, 1), main="correlation between Shannon index produced with PC 1,2 and PC 1,2,7,8,9", col=viridis_colors[c(1,5,10,15,18)])
+plot(corr_diff_PC_12_12789$corr, type="interval", breaks=c(-1,-0.5,-0.1,0.1,0.5, 1), main="correlation between Shannon index produced with PC 1,2 and PC 1,2,7,8,9", col=c(viridis_colors[c(4,8,12,16)], "#009200"), plg=list(title="correlation coefficient"))
+
+
+############################
+# Autocorrelation
+############################
+library(gstat)
+library(sp)
+library(raster)
+Shannon_map <- rast("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_10")
+Shannon_map_raster <- raster(Shannon_map)
+Shannon_map_sp <- as(Shannon_map_raster, "SpatialPointsDataFrame")
+vario <- variogram(Shannon_10~1, data=Shannon_map_sp)
+plot(vario)
+try <- vgm(0.05, "Mat", 4000, nugget=0.12)
+try <- vgm(0.05, "Exp", 4000, nugget=0.12)
+plot(try, cutoff=15000)
+vario_fit <- fit.variogram(vario, vgm(0.05, c("Exp", "Mat"), 4000, nugget=0.12), fit.kappa = TRUE)
+vario_fit <- fit.variogram(vario, vgm(0.05, "Exp", 4000, nugget=0.12), fit.kappa = TRUE)
+vario_fit <- fit.variogram(vario, vgm(0.05, "Mat", 4000, nugget=0.12), fit.kappa = TRUE)
+plot(vario_fit, cutoff=20000)
+plot(vario, vario_fit)
 
 
 
