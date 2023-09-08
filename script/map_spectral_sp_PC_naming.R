@@ -9,11 +9,11 @@ map_spectral_species_ML <- function(Input_Image_File, Output_Dir,
   # check if input mask file has expected format
   if (!Input_Mask_File==FALSE){
     # driverMask_class <- new("GDALReadOnlyDataset", Input_Mask_File)
-    driverMask_class <- GDAL.open(filename = Input_Mask_File,
+    driverMask_class <- rgdal::GDAL.open(filename = Input_Mask_File,
                                   read.only = TRUE, silent=FALSE,
                                   allowedDrivers = NULL, options=NULL)
-    driverMask <- rgdal::getDriverLongName(getDriver(driverMask_class))
-    GDAL.close(driverMask_class)
+    driverMask <- rgdal::getDriverLongName(rgdal::getDriver(driverMask_class))
+    rgdal::GDAL.close(driverMask_class)
     if (driverMask == 'ENVI .hdr Labelled'){
       HDR <- read_ENVI_header(get_HDR_name(Input_Mask_File))
       if (!HDR$`data type`==1){
