@@ -42,6 +42,7 @@ cloud_pix_RF_t["ID",] <- "cl"
 bg_pix_RF_t <- t(bg_pix_RF)
 bg_pix_RF_t["ID",] <- "bg"
 RF_whole_dataset <- cbind(cloud_pix_RF_t, bg_pix_RF_t)
+write.csv(RF_whole_dataset, file="~/data/output/random_forest_cloud_detection/RF_dataset")
 
 split_idx <- sample.split(colnames(RF_whole_dataset), SplitRatio = 0.7)
 
@@ -61,9 +62,12 @@ training_data <- training_data %>%
 class(training_data[,2])
 colnames(training_data)[2:426] <- 1:425
 RF_model <- randomForest(x=training_data[,2:426], y=training_data$ID)
-save(RF_model,file = "~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData")
+saveRDS(RF_model, "~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData")
+# save(RF_model,file = "~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData")
+rm(RF_model)
 
-load("~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData")
+RF_model <- readRDS("~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData")
+# load("~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData")
 pred_test <- predict(RF_model, newdata = validation_data, type= "class")
 table(pred_test, validation_data$ID)  
 
