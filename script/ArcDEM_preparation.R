@@ -34,45 +34,75 @@ tile_DEM_proj <- terra::project(tile_DEM, "EPSG:32613")
 
 plot(tile_DEM_proj, colNA="red")
 
-# try to resample before cropping
-temp_rast <- rast(ext(tile_DEM_proj), resolution = 2)
-tile_DEM_proj_resample <- resample(tile_DEM_proj, temp_rast, method = "bilinear")
-plot(tile_DEM_proj_resample, colNA="red")
-tile_DEM_proj_aggregated <- aggregate(tile_DEM_proj_resample, fact=100/2, fun="sd")
-plot(tile_DEM_proj_aggregated, colNA="red")
-area_interest <- st_read("~/data/areas_of_interest.gpkg")
-area_interest_proj <- st_transform(area_interest,32613)
-tile_DEM_aggregated_crop <- crop(tile_DEM_proj_aggregated, ext(Shannon_map))
-plot(tile_DEM_aggregated_crop)
-Shannon_map <- rast("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi/SPCA/ALPHA/Shannon_10")
-# plot(Shannon_map)
-# plot(tile_DEM_aggregated_crop, add=T, col="red")
-tile_DEM_crop_masked <- mask(tile_DEM_aggregated_crop, Shannon_map)
-# doesn't work
 
 ############################
 # area of interest
 ############################
-area_interest <- st_read("~/data/areas_of_interest.gpkg")
-# area_interest_proj <- st_transform(area_interest, crs=tile_crs_string)
-area_interest_proj <- st_transform(area_interest,32613)
-plot(tile_DEM_proj)
-plot(area_interest_proj, add=T, col="red")
-
-tile_DEM_crop <- crop(tile_DEM_proj, )
-plot(tile_DEM_crop)
-plot(area_interest_proj, add=T)
-
-# tile_DEM_crop_proj <- project(tile_DEM_crop, "EPSG:32613")
-# area_interest_proj <- st_transform(area_interest, 32613)
-# plot(tile_DEM_crop_proj)
+# area_interest <- st_read("~/data/areas_of_interest.gpkg")
+# # area_interest_proj <- st_transform(area_interest, crs=tile_crs_string)
+# area_interest_proj <- st_transform(area_interest,32613)
+# plot(tile_DEM_proj)
+# plot(area_interest_proj, add=T, col="red")
+# 
+# tile_DEM_crop <- crop(tile_DEM_proj, area_interest_proj)
+# plot(tile_DEM_crop)
 # plot(area_interest_proj, add=T)
+# 
+# # tile_DEM_crop_proj <- project(tile_DEM_crop, "EPSG:32613")
+# # area_interest_proj <- st_transform(area_interest, 32613)
+# # plot(tile_DEM_crop_proj)
+# # plot(area_interest_proj, add=T)
+# 
+# # writeRaster(tile_DEM_crop, filename = "tile_DEM_crop_v4.tif")
+# tile_DEM_crop <- rast("~/data/ArcDEM/tile_DEM_crop_v4.tif")
+# viridis_colors <- viridis::inferno(30)
+# plot(tile_DEM_crop, col=viridis_colors[30:1])
+# plot(tile_DEM_crop, colNA="red")
 
-# writeRaster(tile_DEM_crop, filename = "tile_DEM_crop_v4.tif")
-tile_DEM_crop <- rast("~/data/ArcDEM/tile_DEM_crop_v4.tif")
-viridis_colors <- viridis::inferno(30)
-plot(tile_DEM_crop, col=viridis_colors[30:1])
-plot(tile_DEM_crop, colNA="red")
+#################
+# try to crop larger before aggregating
+#################
+
+area_interest <- st_read("~/data/areas_of_interest.gpkg")
+area_interest_proj <- st_transform(area_interest,32613)
+ext(area_interest_proj)
+extended_aoi <- ext(ext(area_interest_proj)[1]-100, ext(area_interest_proj)[2]+100, ext(area_interest_proj)[3]-100, ext(area_interest_proj)[4]+100)
+crs(area_interest_proj)
+tile_DEM_crop <- crop(tile_DEM_proj, extended_aoi)
+plot(tile_DEM_crop)
+ext(tile_DEM_proj)
+ext(area_interest_proj)
+Shannon_map <- rast("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi/SPCA/ALPHA/Shannon_10")
+temp_rast <- rast(ext(Shannon_map), resolution = 2)
+tile_DEM_crop_resample <- resample(tile_DEM_crop, temp_rast, method = "bilinear")
+plot(tile_DEM_crop_resample, colNA="red")
+tile_DEM_crop_resample_noNA <- subst(tile_DEM_crop_resample, NA, -33)
+tile_DEM_crop_aggregated <- aggregate(tile_DEM_crop_resample_noNA, fact=100/2, fun="sd")
+plot(tile_DEM_crop_aggregated)
+tile_DEM_crop_masked <- mask(tile_DEM_crop_aggregated, Shannon_map)
+plot(tile_DEM_crop_masked, col="red")
+plot(Shannon_map, add=T)
+ncell(Shannon_map)
+ncell(tile_DEM_crop_masked)
+
+# produce object for the model
+table(is.na(tile_DEM_crop_masked[1:120540]))
+table(is.na(Shannon_map[1:120540]))
+
+Sentinel_map_poly <- as.polygons(Shannon_map, round=F, aggregate=F, extent=F)
+Arc_DEM_poly <- as.polygons(tile_DEM_crop_masked, round=F, aggregate=F, extent=F)
+# writeVector(Sentinel_map_poly, filename = "~/data/output/Sentinel_map_poly.shp", overwrite=T)
+# writeVector(Arc_DEM_poly, filename = "~/data/output/Arc_DEM_poly.shp", overwrite=T)
+Sentinel_vect <- vect("~/data/output/Sentinel_map_poly.shp")
+Arc_DEM_vect <- vect("~/data/output/Arc_DEM_poly.shp")
+sd_topo <- Arc_DEM_vect$X29_21_1_1
+Sentinel_vect$sd_topo <- sd_topo
+# Sentinel_vect_no_0 <- Sentinel_vect[-c(which(Sentinel_vect$Shannon_10==0))]
+# Sentinel_vect_no_0 <- Sentinel_vect[-c(which(Sentinel_vect$Shannon_10==0)),]
+
+# writeVector(Sentinel_vect, filename = "~/data/output/model_object.shp", overwrite=T)
+# writeVector(Sentinel_vect_no_0, filename = "~/data/output/model_object_no_0.shp", overwrite=T)
+Sentinel_lattice <-readOGR("~/data/output/model_object.shp")
 
 ############################
 # Resample (best way)
@@ -85,7 +115,28 @@ temp_rast <- rast(ext(Shannon_map), resolution = 2)
 tile_DEM_crop_resample <- resample(tile_DEM_crop, temp_rast, method = "bilinear")
 plot(tile_DEM_crop_resample, colNA="red")
 # no NA at the border here
+
+ext(tile_DEM_crop_resample)[c(1,3)]+5
+plot(tile_DEM_crop_resample)
+terra::points(ext(tile_DEM_crop_resample)[1], col="red", cex=2, add=T)
+tile_DEM_crop_resample_noNA <- subst(tile_DEM_crop_resample, NA, -32)
+plot(tile_DEM_crop_resample_noNA, colNA="red")
+
+# point_coords <- origin(tile_DEM_crop_resample)
+# point <- vect(st_point(point_coords))
+# plot(tile_DEM_crop_resample, colNA="red")
+# points(point, col="blue", cex=10)
+
+# plot(Shannon_map, add=T, col="grey", colNA="red")
+# point_coords <- origin(Shannon_map)
+# point <- vect(st_point(point_coords))
+# plot(Shannon_map)
+# points(point, col="black", cex=7)
+
 tile_DEM_crop_aggregated <- aggregate(tile_DEM_crop_resample, fact=100/2, fun="sd")
+tile_DEM_crop_aggregated_try <- aggregate(tile_DEM_crop_resample_noNA, fact=100/2, fun="sd")
+plot(tile_DEM_crop_aggregated_try, colNA="red")
+
 ncell(tile_DEM_crop_aggregated)
 table(is.na(tile_DEM_crop_aggregated[1:120540]))
 plot(tile_DEM_crop_aggregated, colNA="red")
@@ -148,7 +199,7 @@ zero_color <- "red"
 plot(Shannon_map, col = c(zero_color, grey.colors(25)))
 
 #########################
-# other resampling method (better)
+# other resampling method (a bit better)
 #########################
 tile_DEM_100m <- aggregate(tile_DEM_crop, fact=100/2, fun="sd") #1.993736
 Shannon_map <- rast("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi/SPCA/ALPHA/Shannon_10")
