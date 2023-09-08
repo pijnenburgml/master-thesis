@@ -15,7 +15,7 @@ map_alpha_div_ML <- function(Input_Image_File = FALSE,
   SSDpathlist <- get_SSpath(Output_Dir, Input_Image_File, TypePCA, ClassifMap, nbclusters)
   Spectral_Species_Path <- SSDpathlist$Spectral_Species_Path
   PCs <- paste0("SpectralSpecies",paste0(SelectedPCs, collapse = ""))
-  Spectral_Species_Path <-  file.path(Output_Dir_SS, PCs)
+  Spectral_Species_Path <-  file.path(Output_Dir, NameRaster, "SPCA/SpectralSpecies",PCs)
   SSD_Dir <- SSDpathlist$SSD_Dir
   Input_Image_File <- SSDpathlist$Input_Image_File
   nbclusters <- SSDpathlist$nbclusters
