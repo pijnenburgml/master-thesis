@@ -128,18 +128,18 @@ grid_polygons <- st_read("~/data/output/tilling/grid_polygons_aoi.shp")
 ###################
 boundary_dir <- "~/data/Aviris_data/boundaries"
 boundaries <- list.files(path=boundary_dir, pattern="KML", full.names = T)
-try <- st_read("~/data/Aviris_data/boundaries/ang20190801t143347_outline_KML.kml")
-try_proj <- st_transform(try,32613)
-st_intersects(grid_polygons[1,], try_proj$geometry)
-
-#plot enabling to tell which tile cell overlap with a flight stripe (here 3347 = try_proj)
-ggplot(data=grid_polygons) +
-  geom_sf(
-    # aes(fill = cell_id, alpha=0.1)
-  ) +
-  geom_sf_label(aes(label=cell_id), cex=0.8)+
-  geom_sf(data=boundaries_multipolygon, aes(fill="red", alpha=0.1))
-st_intersects(grid_polygons[grep(pattern="x_1_y_17", grid_polygons$cell_id),], try_proj)
+# try <- st_read("~/data/Aviris_data/boundaries/ang20190801t143347_outline_KML.kml")
+# try_proj <- st_transform(try,32613)
+# st_intersects(grid_polygons[1,], try_proj$geometry)
+# 
+# #plot enabling to tell which tile cell overlap with a flight stripe (here 3347 = try_proj)
+# ggplot(data=grid_polygons) +
+#   geom_sf(
+#     # aes(fill = cell_id, alpha=0.1)
+#   ) +
+#   geom_sf_label(aes(label=cell_id), cex=0.8)+
+#   geom_sf(data=boundaries_multipolygon, aes(fill="red", alpha=0.1))
+# st_intersects(grid_polygons[grep(pattern="x_1_y_17", grid_polygons$cell_id),], try_proj)
 
 ######################
 # make multipolygon from all the flight strip boundaries
@@ -195,8 +195,9 @@ sf::gdal_utils("warp",
 ###############
 # Using everything for parallel processing (on li)
 ###############
-
-cl <- 2 # change with the number of cluster 
+library(pbapply)
+library(parallel)
+cl <- 4 # change with the number of cluster 
 
 # then run things in parallel 
 pblapply(grid_polygons$cell_id,
@@ -226,8 +227,8 @@ pblapply(grid_polygons$cell_id,
              sf::gdal_utils("warp", source = update_paths, destination = paste0("/scratch/mpijne/reflectance_data/", cell),
                             options = c("-of", "ENVI", "-t_srs", "epsg:32613",  "-co", "INTERLEAVE=BIL"))
            }
-         }
-         cl = cl # the name of your cluster
+          }
+          # cl = 4
 )
 
 # check if trial with test file worked: 
@@ -271,10 +272,11 @@ plot(shade_mask)
 plot(water_mask)
 plotRGB(strip_4159_crop, r=names(strip_4159_crop)[54], g=names(strip_4159_crop)[36], b=names(strip_4159_crop)[20], stretch="lin")
 
-RF_model_try <- get(load("~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData"))
+RF_model <-readRDS("~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData")
 build_area_mask <- rast("~/data/output/build_are_mask.tif")
-temp_rast <- rast(ext(sent_aoi_stack_crop), resolution = 5)
-build_area_mask_5res <- resample(building_mask, temp_rast, method="near")
+sent_aoi_stack_crop <- rast("output/sent_crop_view.tif")
+temp_rast <- rast(ext(sent_aoi_stack_crop), resolution = res(tile))
+build_area_mask_5res <- resample(build_area_mask, temp_rast, method="near")
 
 pblapply(grid_polygons$cell_id,
          function(cell) {
@@ -288,6 +290,9 @@ pblapply(grid_polygons$cell_id,
            names(tile) <- 1:425
            cloud_class <- terra::predict(object=tile, model=RF_model)
            cloud_mask <- ifel(cloud_class=="cl", 0, 1)
+           build_area_mask <- rast("~/data/output/build_are_mask.tif")
+           temp_rast <- rast(ext(sent_aoi_stack_crop), resolution = res(tile))
+           build_area_mask_5res <- resample(build_area_mask, temp_rast, method="near")
            building_mask <- crop(build_area_mask_5res, tile)
            mask <- mosaic(shade_mask, water_mask, cloud_mask, building_mask, fun="min")
            # mask <- ifel(mask==0, NA, 1) #is it necessary?
@@ -295,6 +300,20 @@ pblapply(grid_polygons$cell_id,
                          }
          cl = cl # the name of your cluster
 )
+
+
+############################
+# parallel processing to create Output_30_PCs
+############################
+pblapply(grid_polygons$cell_id,
+         function(cell) {
+            
+           
+         }
+)
+
+
+
 
 
 
