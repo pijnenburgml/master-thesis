@@ -439,18 +439,24 @@ library(raster)
 Shannon_map <- rast("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_10")
 Shannon_map_raster <- raster(Shannon_map)
 Shannon_map_sp <- as(Shannon_map_raster, "SpatialPointsDataFrame")
-vario <- variogram(Shannon_10~1, data=Shannon_map_sp)
-plot(vario)
-try <- vgm(0.05, "Mat", 4000, nugget=0.12)
-try <- vgm(0.05, "Exp", 4000, nugget=0.12)
+
+vario_close <- variogram(Shannon_10~1, data=Shannon_map_sp, cutoff=5000, width=100)
+plot(vario_close)
+vario_far <- variogram(Shannon_10~1, data=Shannon_map_sp, cutoff=30000, width=1000)
+plot(vario_far)
+
+try <- vgm(0.1, "Mat", 2000, nugget=0.1)
 plot(try, cutoff=15000)
-vario_fit <- fit.variogram(vario, vgm(0.05, c("Exp", "Mat"), 4000, nugget=0.12), fit.kappa = TRUE)
-vario_fit <- fit.variogram(vario, vgm(0.05, "Exp", 4000, nugget=0.12), fit.kappa = TRUE)
-vario_fit <- fit.variogram(vario, vgm(0.05, "Mat", 4000, nugget=0.12), fit.kappa = TRUE)
-plot(vario_fit, cutoff=20000)
-plot(vario, vario_fit)
+
+vario_fit_close <- fit.variogram(vario_close, vgm(0.1, "Mat", 1000, nugget=0.1), fit.kappa = TRUE)
+vario_fit_far <- fit.variogram(vario_far, vgm(0.05, "Mat", 4000, nugget=0.12), fit.kappa = TRUE)
+
+plot(vario_fit_far, cutoff=5000)
+plot(vario_far, vario_fit_far)
 
 
+plot(vario_fit_close, cutoff=5000)
+plot(vario_close, vario_fit_close)
 
 
 
