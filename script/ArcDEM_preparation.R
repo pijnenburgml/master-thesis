@@ -231,3 +231,51 @@ writeVector(Sentinel_vect, filename = "~/data/ArcDEM/model_object.shp", overwrit
 Sentinel_lattice <-readOGR("~/data/ArcDEM/model_object.shp")
 
 
+#####################
+# variogram
+#####################
+library(gstat)
+library(sp)
+library(raster)
+sd_ele_100 <- rast("~/data/ArcDEM/ArcDEM_masked_10_res.tif")
+sd_ele_100_raster <- raster(sd_ele_100)
+sd_ele_100_sp <- as(sd_ele_100_raster, "SpatialPointsDataFrame")
+
+vario_ele <- variogram(X29_21_1_1_2m_v4.1_dem~1, data=sd_ele_100_sp, cutoff=30000, width=500)
+plot(vario_ele)
+
+vario_ele_close <- variogram(X29_21_1_1_2m_v4.1_dem~1, data=sd_ele_100_sp, cutoff=5000, width=100)
+plot(vario_ele_close)
+
+vario_ele_far <- variogram(X29_21_1_1_2m_v4.1_dem~1, data=sd_ele_100_sp, cutoff=30000, width=1000)
+plot(vario_ele_far)
+
+vario_log_ele <- variogram(log(X29_21_1_1_2m_v4.1_dem)~1, data=sd_ele_100_sp)
+plot(vario_log_ele)
+
+vario_log_ele_close <- variogram(log(X29_21_1_1_2m_v4.1_dem)~1, data=sd_ele_100_sp, cutoff=5000, width=100)
+plot(vario_log_ele_close)
+
+vario_log_ele_far <- variogram(log(X29_21_1_1_2m_v4.1_dem)~1, data=sd_ele_100_sp, cutoff=30000, width=1000)
+plot(vario_log_ele_far)
+
+try <- vgm(0.1, "Exp", 5000, nugget=0.1)
+plot(try, cutoff=15000)
+
+vario_fit_ele <- fit.variogram(vario_log_ele, vgm(0.1, "Exp", 5000, nugget=0.1), fit.kappa = TRUE)
+plot(vario_fit_ele, cutoff=10000)
+plot(vario_log_ele, vario_fit_ele)
+plot(vario_log_ele_far, vario_fit_ele)
+
+
+vario_fit_close <- fit.variogram(vario_close, vgm(0.05, "Mat", 4000, nugget=0.12), fit.kappa = TRUE)
+vario_fit_far <- fit.variogram(vario_far, vgm(0.05, "Mat", 4000, nugget=0.12), fit.kappa = TRUE)
+
+plot(vario_fit_far, cutoff=5000)
+plot(vario_far, vario_fit_far)
+
+
+plot(vario_fit_close, cutoff=5000)
+plot(vario_close, vario_fit_close)
+
+
