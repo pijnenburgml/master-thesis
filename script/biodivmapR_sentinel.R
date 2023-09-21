@@ -459,6 +459,22 @@ plot(vario_fit_close, cutoff=5000)
 plot(vario_close, vario_fit_close)
 
 
-
+##################
+# try out distance
+##################
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 10, "PC1278", sep="_"))
+dist <- terra::distance(Shannon)
+plot(dist)
+Shannon
+Shannon_for_dist <- ifel(is.na(Shannon), 999, NA)
+dist_2 <- terra::distance(Shannon_for_dist)
+plot(dist_2)
+table(as.vector(is.na(dist_2)))
+dist_2[dist_2 == 0] <- NA
+table(as.vector(is.na(dist_2)))
+table(as.vector(is.na(Shannon)))
+plot(dist_2, colNA="red")
+plot(Shannon, add=T, colNA="blue")
+writeRaster(dist_2, filename = "~/data/biodivmapR_sent/dist_to_water.tif")
 
 
