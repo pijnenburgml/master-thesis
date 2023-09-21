@@ -244,7 +244,7 @@ sd_ele_100_sp <- as(sd_ele_100_raster, "SpatialPointsDataFrame")
 vario_ele <- variogram(X29_21_1_1_2m_v4.1_dem~1, data=sd_ele_100_sp, cutoff=30000, width=500)
 plot(vario_ele)
 
-vario_ele_close <- variogram(X29_21_1_1_2m_v4.1_dem~1, data=sd_ele_100_sp, cutoff=5000, width=100)
+vario_ele_close <- variogram(X29_21_1_1_2m_v4.1_dem~1, data=sd_ele_100_sp, cutoff=7000, width=100)
 plot(vario_ele_close)
 
 vario_ele_far <- variogram(X29_21_1_1_2m_v4.1_dem~1, data=sd_ele_100_sp, cutoff=30000, width=1000)
@@ -259,23 +259,174 @@ plot(vario_log_ele_close)
 vario_log_ele_far <- variogram(log(X29_21_1_1_2m_v4.1_dem)~1, data=sd_ele_100_sp, cutoff=30000, width=1000)
 plot(vario_log_ele_far)
 
-try <- vgm(0.1, "Exp", 5000, nugget=0.1)
-plot(try, cutoff=15000)
+try <- vgm(0.05, "Exp", 4000, nugget=0.12)
+try <- vgm(0.05, "Mat", 4000, nugget=0.12)
+plot(try, cutoff=5000)
+vario_fit_close <- fit.variogram(vario_log_ele_close, try, fit.kappa = TRUE)
+plot(vario_log_ele_close, vario_fit_close, xlab="distance [m]")
+vario_fit_close
+plot(vario_log_ele_close)
+plot(vario_fit_close, cutoff=000)
 
-vario_fit_ele <- fit.variogram(vario_log_ele, vgm(0.1, "Exp", 5000, nugget=0.1), fit.kappa = TRUE)
+vario_fit_ele <- fit.variogram(vario_log_ele, vgm(0.1, "Exp", 3000, nugget=0.1), fit.kappa = TRUE)
 plot(vario_fit_ele, cutoff=10000)
-plot(vario_log_ele, vario_fit_ele)
-plot(vario_log_ele_far, vario_fit_ele)
-
-
-vario_fit_close <- fit.variogram(vario_close, vgm(0.05, "Mat", 4000, nugget=0.12), fit.kappa = TRUE)
-vario_fit_far <- fit.variogram(vario_far, vgm(0.05, "Mat", 4000, nugget=0.12), fit.kappa = TRUE)
-
+vario_fit_far <- fit.variogram(vario_log_ele_far, vgm(0.05, "Mat", 4000, nugget=0.12), fit.kappa = TRUE)
 plot(vario_fit_far, cutoff=5000)
 plot(vario_far, vario_fit_far)
 
 
 plot(vario_fit_close, cutoff=5000)
 plot(vario_close, vario_fit_close)
+
+
+# sd slope
+sd_slope_100 <- rast("~/data/ArcDEM/sd_slope_masked_10_res.tif")
+sd_slope_100_raster <- raster(sd_slope_100)
+sd_slope_100_sp <- as(sd_slope_100_raster, "SpatialPointsDataFrame")
+vario_slope_close <- variogram(log(slope)~1, data=sd_slope_100_sp, cutoff=7000, width=100)
+plot(vario_slope_close)
+try <- vgm(0.1, "Exp", 1000, nugget=0.12)
+# try <- vgm(0.05, "Mat", 4000, nugget=0.12)
+plot(try, cutoff=5000)
+vario_fit_slope_close <- fit.variogram(vario_slope_close, try, fit.kappa = TRUE)
+plot(vario_slope_close, vario_fit_slope_close, xlab="distance [m]")
+vario_fit_slope_close
+
+
+##################
+# Terrain
+##################
+tile_DEM_proj <- rast("~/data/ArcDEM/tile_DEM_proj.tif")
+area_interest <- st_read("~/data/areas_of_interest.gpkg")
+area_interest_proj <- st_transform(area_interest,32613)
+ext(area_interest_proj)
+window_size <- c(10, 20, 30, 50, 100)
+multiple <- window_size*10
+extended_aoi <- ext(ext(area_interest_proj)[1]-multiple[5], ext(area_interest_proj)[2]+multiple[5], ext(area_interest_proj)[3]-multiple[5], ext(area_interest_proj)[4]+multiple[5])
+tile_DEM_crop <- crop(tile_DEM_proj, extended_aoi)
+fact <- window_size*10/2
+
+for(x in 1:length(fact)){
+  # browser()
+  Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", window_size[x], "PC1278", sep="_"))
+  temp_rast <- rast(ext(Shannon), resolution = 10)
+  tile_DEM_crop_resample <- resample(tile_DEM_crop, temp_rast, method = "bilinear")
+  slope <- terrain(tile_DEM_crop_resample, v="slope", neighbors=4, unit="degrees")
+  # aspect <- terrain(tile_DEM_crop_resample, v="aspect", neighbors=4, unit="degrees")
+  slope_noNA <- subst(slope, NA, 0) #have to adjust
+  # aspect_noNA <- subst(aspect, NA, 0)
+  slope_aggregated <- aggregate(slope_noNA, fact=window_size[x], fun="sd")
+  # aspect_aggregated <- aggregate(aspect_noNA, fact=fact[x], fun="mean")
+  slope_mask <- mask(slope_aggregated, Shannon)
+  # aspect_mask <- mask(aspect_aggregated, Shannon)
+  writeRaster(slope_mask, filename = paste("~/data/ArcDEM/sd_slope_agg10_masked_", window_size[x], "_res.tif", sep=""))
+  # writeRaster(aspect_mask, filename = paste("~/data/ArcDEM/mean_aspect_masked_", window_size[x], "_res.tif", sep=""))
+  # Arc_DEM_poly <- as.polygons(tile_DEM_masked, round=F, aggregate=F, extent=F, na.rm=F)
+  # Sentinel_shannon_poly <- as.polygons(Shannon, round=F, aggregate=F, extent=F,na.rm=F)
+  # writeVector(Sentinel_shannon_poly,filename=paste("~/data/output/INLA_modelling/Sentinel_shannon_poly", "res", window_size[x], "with_NA", sep="_"))
+  # writeVector(Arc_DEM_poly, filename = paste("~/data/output/INLA_modelling/Arc_DEM_poly","res",window_size[x], "with_NA", sep="_"))
+}
+
+###############
+# Effect of max elevation
+###############
+
+tile_DEM_proj <- rast("~/data/ArcDEM/tile_DEM_proj.tif")
+area_interest <- st_read("~/data/areas_of_interest.gpkg")
+area_interest_proj <- st_transform(area_interest,32613)
+ext(area_interest_proj)
+window_size <- c(10, 20, 30, 50, 100)
+multiple <- window_size*10
+extended_aoi <- ext(ext(area_interest_proj)[1]-multiple[5], ext(area_interest_proj)[2]+multiple[5], ext(area_interest_proj)[3]-multiple[5], ext(area_interest_proj)[4]+multiple[5])
+tile_DEM_crop <- crop(tile_DEM_proj, extended_aoi)
+fact <- window_size*10/2
+
+for(x in 1:length(fact)){
+  # browser()
+  Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", window_size[x], "PC1278", sep="_"))
+  temp_rast <- rast(ext(Shannon), resolution = 2)
+  tile_DEM_crop_resample <- resample(tile_DEM_crop, temp_rast, method = "bilinear")
+  tile_DEM_crop_resample_noNA <- subst(tile_DEM_crop_resample, NA, -33) #have to adjust
+  tile_DEM_crop_aggregated <- aggregate(tile_DEM_crop_resample_noNA, fact=fact[x], fun="max")
+  tile_DEM_masked <- mask(tile_DEM_crop_aggregated, Shannon)
+  writeRaster(tile_DEM_masked, filename = paste("~/data/ArcDEM/max_ele_masked_", window_size[x], "_res.tif", sep=""))
+  # Arc_DEM_poly <- as.polygons(tile_DEM_masked, round=F, aggregate=F, extent=F, na.rm=F)
+  # Sentinel_shannon_poly <- as.polygons(Shannon, round=F, aggregate=F, extent=F,na.rm=F)
+  # writeVector(Sentinel_shannon_poly,filename=paste("~/data/output/INLA_modelling/Sentinel_shannon_poly", "res", window_size[x], "with_NA", sep="_"))
+  # writeVector(Arc_DEM_poly, filename = paste("~/data/output/INLA_modelling/Arc_DEM_poly","res",window_size[x], "with_NA", sep="_"))
+}
+
+
+###############
+# Mean elevation
+###############
+tile_DEM_proj <- rast("~/data/ArcDEM/tile_DEM_proj.tif")
+area_interest <- st_read("~/data/areas_of_interest.gpkg")
+area_interest_proj <- st_transform(area_interest,32613)
+ext(area_interest_proj)
+window_size <- c(10, 20, 30, 50, 100)
+multiple <- window_size*10
+extended_aoi <- ext(ext(area_interest_proj)[1]-multiple[5], ext(area_interest_proj)[2]+multiple[5], ext(area_interest_proj)[3]-multiple[5], ext(area_interest_proj)[4]+multiple[5])
+tile_DEM_crop <- crop(tile_DEM_proj, extended_aoi)
+fact <- window_size*10/2
+
+for(x in 1:length(fact)){
+  # browser()
+  Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", window_size[x], "PC1278", sep="_"))
+  temp_rast <- rast(ext(Shannon), resolution = 2)
+  tile_DEM_crop_resample <- resample(tile_DEM_crop, temp_rast, method = "bilinear")
+  tile_DEM_crop_resample_noNA <- subst(tile_DEM_crop_resample, NA, -33) #have to adjust
+  tile_DEM_crop_aggregated <- aggregate(tile_DEM_crop_resample_noNA, fact=fact[x], fun="mean")
+  tile_DEM_masked <- mask(tile_DEM_crop_aggregated, Shannon)
+  writeRaster(tile_DEM_masked, filename = paste("~/data/ArcDEM/mean_ele_masked_", window_size[x], "_res.tif", sep=""))
+  # Arc_DEM_poly <- as.polygons(tile_DEM_masked, round=F, aggregate=F, extent=F, na.rm=F)
+  # Sentinel_shannon_poly <- as.polygons(Shannon, round=F, aggregate=F, extent=F,na.rm=F)
+  # writeVector(Sentinel_shannon_poly,filename=paste("~/data/output/INLA_modelling/Sentinel_shannon_poly", "res", window_size[x], "with_NA", sep="_"))
+  # writeVector(Arc_DEM_poly, filename = paste("~/data/output/INLA_modelling/Arc_DEM_poly","res",window_size[x], "with_NA", sep="_"))
+}
+
+
+###############
+# Roughness
+###############
+tile_DEM_proj <- rast("~/data/ArcDEM/tile_DEM_proj.tif")
+area_interest <- st_read("~/data/areas_of_interest.gpkg")
+area_interest_proj <- st_transform(area_interest,32613)
+ext(area_interest_proj)
+window_size <- c(10, 20, 30, 50, 100)
+multiple <- window_size*10
+extended_aoi <- ext(ext(area_interest_proj)[1]-multiple[5], ext(area_interest_proj)[2]+multiple[5], ext(area_interest_proj)[3]-multiple[5], ext(area_interest_proj)[4]+multiple[5])
+tile_DEM_crop <- crop(tile_DEM_proj, extended_aoi)
+fact <- window_size*10/2
+
+for(x in 1:length(fact)){
+  # browser()
+  Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", window_size[x], "PC1278", sep="_"))
+  temp_rast <- rast(ext(Shannon), resolution = 2)
+  tile_DEM_crop_resample <- resample(tile_DEM_crop, temp_rast, method = "bilinear")
+  roughness <- terrain(tile_DEM_crop_resample, v="roughness")
+  roughness_noNA <- subst(roughness, NA, 0) #have to adjust
+  roughness_aggregated <- aggregate(roughness_noNA, fact=fact[x], fun="sd")
+  roughness_mask <- mask(roughness_aggregated, Shannon)
+  writeRaster(roughness_mask, filename = paste("~/data/ArcDEM/sd_roughness_masked_", window_size[x], "_res.tif", sep=""))
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
