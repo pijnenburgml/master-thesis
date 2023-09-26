@@ -20,18 +20,45 @@ library(patchwork)
 # writeRaster(sent, filename = "~/data/biodivmapR_sent/sent_crop_envi_BIL", filetype="ENVI", gdal=c("INTERLEAVE=BIL"), overwrite=T)
 
 ################################################################################
+
+##########
+# creating sentinel file corresponding to aviris flight strip 0708
+##########
+sent_whole <- rast("~/data/biodivmapR_sent/sent_crop_envi_BIL")
+mask_whole <- rast("~/data/biodivmapR_sent/mask_sent2_final_NA")
+mask_aviris <- rast("/scratch/mpijne/reflectance_data/strip_0708_aoi_mask")
+plot(mask_aviris)
+ext(mask_aviris)
+plot(mask_whole)
+ext(mask_whole)
+temp_rast <- rast(ext(mask_whole), resolution=10)
+mask_aviris_10 <- resample(mask_aviris, temp_rast)
+ext(mask_aviris_10)
+plot(mask_whole)
+plot(mask_aviris_10, add=T)
+sent_crop_mask <- mask(mask_whole, mask_aviris_10)
+plot(sent_crop_mask, colNA="red")
+# writeRaster(sent_crop_mask, filetype="ENVI", gdal="INTERLEAVE=BSQ", overwrite=T, datatype="INT1U", filename = "~/data/biodivmapR_sent/mask_matchin_aviris")
+
+
+###########
+# Setting parameters
+###########
+
 Datadir <- "~/data/biodivmapR_sent"
 NameRaster <- "sent_crop_envi_BIL"
 # Define path for image file to be processed
 Input_Image_File <- file.path(Datadir,NameRaster)
 # Define path for corresponding mask file
-NameMask <- "mask_sent2_final_NA"
+# NameMask <- "mask_sent2_final_NA"
+NameMask <- "mask_matchin_aviris"
 Input_Mask_File <- file.path(Datadir, NameMask)
 # Input_Mask_File <- F
 # Define path for master output directory where files produced during the process are saved
 Output_Dir <- '~/data/biodivmapR_sent/RESULTS_cluster_50'
 Output_Dir <- '~/data/biodivmapR_sent/RESULTS_cluster_20'
 Output_Dir <- "~/data/biodivmapR_sent/RESULTS_PC_selection"
+Output_Dir <- "~/data/biodivmapR_sent/RESULTS_aviris_extend"
 # dir.create(path = Output_Dir,recursive = T,showWarnings = F)
 # NDVI_Thresh <- 0.8
 # Blue_Thresh <- 500
@@ -80,6 +107,10 @@ PCA_Output <- perform_PCA(Input_Image_File = Input_Image_File,
                           MaxRAM = MaxRAM)
 # save(PCA_Output, file="~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/PCA/PCA_Output.RData")
 PCA_Output <- get(load("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/PCA/PCA_Output.RData"))
+
+# save(PCA_Output, file="~/data/biodivmapR_sent/RESULTS_aviris_extend/sent_crop_envi_BIL/SPCA/PCA/PCA_Output.Rdata")
+PCA_Output <- get(load("~/data/biodivmapR_sent/RESULTS_aviris_extend/sent_crop_envi_BIL/SPCA/PCA/PCA_Output.Rdata"))
+
 
 # path for the updated mask
 Input_Mask_File <- PCA_Output$MaskPath
@@ -144,6 +175,7 @@ Kmeans_info <- map_spectral_species(Input_Image_File = Input_Image_File,
 # save(Kmeans_info, file="~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info_PC12.Rdata")
 Kmeans_info <- get(load("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info.Rdata"))
 
+
 # To have the name of the PCs selected to map the spectral species in the filename 
 # run the function saved in the document map_spectral_sp_PC_naming.R to have in the 
 # global environment
@@ -156,6 +188,9 @@ Kmeans_info <- map_spectral_species_ML(Input_Image_File = Input_Image_File,
                                     nbCPU = nbCPU, MaxRAM = MaxRAM,
                                     SelectedPCs = SelectedPCs)
 # save(Kmeans_info, file="~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info_PC1278.Rdata")
+Kmeans_info <- get(load("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info_PC1278.Rdata"))
+
+# save(Kmeans_info, file="~/data/biodivmapR_sent/RESULTS_aviris_extend/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info_PC1278.Rdata")
 Kmeans_info <- get(load("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info_PC1278.Rdata"))
 
 
@@ -235,8 +270,10 @@ map_alpha_div_ML(Input_Image_File = Input_Image_File,
               nbclusters = nbclusters, SelectedPCs = SelectedPCs)
 
 
-path <- paste(Output_Dir, "/", NameRaster, "/SPCA/ALPHA/Shannon_", window_size, sep="")
+path <- paste(Output_Dir, "/", NameRaster, "/SPCA/ALPHA/Shannon_", window_size, "_PC", paste0(SelectedPCs, collapse = ""),sep="")
 Shannon_map <- rast(path)
+Shannon_map <- rast("~/data/biodivmapR_sent/RESULTS_aviris_extend/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_10_PC1278")
+
 # Shannon_map <- rast("~/data/biodivmapR_sent/RESULTS/sent_crop_envi/SPCA/ALPHA/Shannon_10")
 # Shannon_map <- rast("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_10")
 par(mfrow=c(1,2))
@@ -256,7 +293,7 @@ shannon_mean_map <- rast("~/data/biodivmapR_sent/RESULTS/sent_crop_envi/SPCA/ALP
 viridis_colors <- viridis::plasma(20)
 na_col <- grey(0.8, alpha=0.5)
 m <- ggplot() +
-  geom_spatraster(data = Shannon_map, na.rm = TRUE, aes(fill=Shannon_30))+ #need to change the fill variable
+  geom_spatraster(data = Shannon_map, na.rm = TRUE, aes(fill=Shannon_10_PC1278))+ #need to change the fill variable
   # theme_map()+
   theme_minimal()+
   scale_fill_gradientn(colours = viridis_colors, na.value = na_col) +
@@ -275,15 +312,23 @@ map_div <- m+
     pad_y = unit(0.4, "in"), 
     style="ticks"
   )
+map_div
 
 sent_view <- rast("~/data/output/sent_crop_view.tif")
 plotRGB(sent_view, r=3, g=2, b=1, scale=10000, stretch="lin", smooth=T)
 sent_view_scale <-sent_view/7
 
+boundary_strip_0708 <- st_read("~/scratch/reflectance_data/boundary_strip_0708.shp")
+boundary_strip_0708_proj <- st_transform(boundary_strip_0708,32613)
+area_interest <- st_read("areas_of_interest.gpkg")
+area_interest_proj <- st_transform(area_interest,32613)
+boundary_strip_0708_crop <- st_crop(boundary_strip_0708_proj, area_interest_proj)
+
 s <- ggplot() +
   geom_spatraster_rgb(data = sent_view_scale, interpolate=T, r=3, g=2, b=1)+
-  # theme_map()+
-  theme_minimal()
+  # geom_sf(data=boundary_strip_0708_crop, aes(alpha=0), show.legend = FALSE)+
+  theme_map()
+  # theme_minimal()
 s
 
 map_truecol <- s+
@@ -291,8 +336,12 @@ map_truecol <- s+
   pad_y = unit(0.4, "in"), style="ticks", line_col="white", text_col="white")+
   
   ggspatial::annotation_north_arrow(location="bl", which_north=T, pad_x=unit(0, "in"),
-  pad_y = unit(0.4, "in"), height = unit(0.6, "cm"), width=unit(0.6, "cm"))
+  pad_y = unit(0.4, "in"), height = unit(0.7, "cm"), width=unit(0.7, "cm"))
+map_truecol
 
+setwd("~/data/output")
+save_plot(filename = "sentinel_full_view_aviris0708_boundary.png", map_truecol, base_asp = 2, bg = "white")
+save_plot(filename = "sentinel_full_view.png", map_truecol, base_asp = 2, bg = "white")
 
 cowplot::plot_grid(map_div, map_truecol, ncol = 2, align = "hv")
 
