@@ -15,7 +15,7 @@ require(spdep)
 library(INLA)
 library(terra)
 library(INLAutils)
-
+library(scales)
 
 #################
 # Scaling analysis 
@@ -112,12 +112,12 @@ fact <- window_size*10/2
 for(x in 1:length(fact)){
   # browser()
   Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", window_size[x], "PC1278", sep="_"))
-  temp_rast <- rast(ext(Shannon), resolution = 2)
+  temp_rast <- rast(ext(Shannon), resolution = 10)
   tile_DEM_crop_resample <- resample(tile_DEM_crop, temp_rast, method = "bilinear")
   tile_DEM_crop_resample_noNA <- subst(tile_DEM_crop_resample, NA, -33) #have to adjust
-  tile_DEM_crop_aggregated <- aggregate(tile_DEM_crop_resample_noNA, fact=fact[x], fun="sd")
+  tile_DEM_crop_aggregated <- aggregate(tile_DEM_crop_resample_noNA, fact=window_size[x], fun="sd")
   tile_DEM_masked <- mask(tile_DEM_crop_aggregated, Shannon)
-  writeRaster(tile_DEM_masked, filename = paste("~/data/ArcDEM/ArcDEM_masked_", window_size[x], "_res.tif", sep=""))
+  writeRaster(tile_DEM_masked, filename = paste("~/data/ArcDEM/sd_ele_agg10_", window_size[x], "_res.tif", sep=""))
   # Arc_DEM_poly <- as.polygons(tile_DEM_masked, round=F, aggregate=F, extent=F, na.rm=F)
   # Sentinel_shannon_poly <- as.polygons(Shannon, round=F, aggregate=F, extent=F,na.rm=F)
   # writeVector(Sentinel_shannon_poly,filename=paste("~/data/output/INLA_modelling/Sentinel_shannon_poly", "res", window_size[x], "with_NA", sep="_"))
@@ -134,7 +134,7 @@ for(x in 1:length(fact)){
 # writeVector(Sentinel_shannon_vect, filename = paste("~/data/output/INLA_modelling/model_object_res_", window_size[x], "_with_NA.shp", sep=""), overwrite=T)
 
 #################
-# Modelling
+# Modelling sd(elevation)
 #################
 
 # resolution 100m x 100m
@@ -175,53 +175,41 @@ data <- data[-c(which(is.na(s))),]
 # hyper = list(range = list(param =c(1, 1),prior = "loggamma",initial=1),
 #              prec = list(param=c(1, 1)))
 
-formula= Shannon_index ~ 1+ log(topo)+
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# formula= Shannon_index ~ 1+ log(topo)+
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# 
+# Gaussian_loglink_shannon_topo <- inla(formula,family = "gaussian",
+#                           control.family=list(link='identity'),
+#                           data = data,
+#                           control.compute = list(cpo = T, dic = T, waic = T, return.marginals.predictor=TRUE), verbose=TRUE)
+# 
+# summary(Gaussian_loglink_shannon_topo)
+# # save(Gaussian_loglink, file="~/data/output/INLA_modelling/Gaussian_model_loglink_shannon_log_topo.Rdata")
+# Gaussian_loglink <- get(load("~/data/output/INLA_modelling/Gaussian_model_loglink_shannon_log_topo.Rdata"))
+# 
+# 
+# plot_inla_residuals(Gaussian_loglink_withNA, observed=data$Shannon_index)
+# 
+# ggplot_inla_residuals(Model_Lattice_no_ndvi, observed=observed)
+# ggplot_inla_residuals2(Model_Lattice_no_ndvi, observed, se = FALSE)
+# 
+# 
+# formula= Shannon_index ~ 1+ log(topo)+
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# 
+# Gaussian_shannon_log_topo <- inla(formula,family = "gaussian",
+#                                       control.family=list(link='identity'),
+#                                       data = data,
+#                                       control.compute = list(cpo = T, dic = T, waic = T, return.marginals.predictor=TRUE), verbose=TRUE)
+# 
+# 
+# summary(Gaussian_shannon_log_topo)
+# plot(data$Shannon_index~log(data$topo))
 
-Gaussian_loglink_shannon_topo <- inla(formula,family = "gaussian",
-                          control.family=list(link='identity'),
-                          data = data,
-                          control.compute = list(cpo = T, dic = T, waic = T, return.marginals.predictor=TRUE), verbose=TRUE)
-
-summary(Gaussian_loglink_shannon_topo)
-# save(Gaussian_loglink, file="~/data/output/INLA_modelling/Gaussian_model_loglink_shannon_log_topo.Rdata")
-Gaussian_loglink <- get(load("~/data/output/INLA_modelling/Gaussian_model_loglink_shannon_log_topo.Rdata"))
-
-
-plot_inla_residuals(Gaussian_loglink_withNA, observed=data$Shannon_index)
-
-ggplot_inla_residuals(Model_Lattice_no_ndvi, observed=observed)
-ggplot_inla_residuals2(Model_Lattice_no_ndvi, observed, se = FALSE)
-
-
-formula= Shannon_index ~ 1+ log(topo)+
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-
-Gaussian_shannon_log_topo <- inla(formula,family = "gaussian",
-                                      control.family=list(link='identity'),
-                                      data = data,
-                                      control.compute = list(cpo = T, dic = T, waic = T, return.marginals.predictor=TRUE), verbose=TRUE)
-
-
-summary(Gaussian_shannon_log_topo)
-plot(data$Shannon_index~log(data$topo))
 #####
 # Gamma
 #####
-
 # seems better than gaussian
-
-formula= Shannon_index ~ 1+ log(topo)+
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-
-Gamma_shannon_log_topo <- inla(formula,     
-                            family = "gamma", # have to change the family, not gaussian, try gamma
-                            data = data,
-                            control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-
-summary(Gamma_shannon_log_topo)
-# save(Gamma_shannon_log_topo, file="~/data/output/INLA_modelling/Gamma_shannon_log_topo.Rdata")
-Gamma_shannon_log_topo <- get(load("~/data/output/INLA_modelling/Gaussian_model_loglink_shannon_log_topo.Rdata"))
 
 formula= Shannon_index ~ 1+ topo+
   f(node, model="matern2d", nrow=nrow, ncol=ncol)
@@ -233,9 +221,7 @@ Gamma_shannon_topo <- inla(formula,
 
 summary(Gamma_shannon_topo)
 
-exp(Gamma_shannon_topo$summary.fixed)
 Gamma_shannon_topo_res100 <- Gamma_shannon_topo
-
 save(Gamma_shannon_topo_res100, file="~/data/output/INLA_modelling/Gamma_shannon_topo_res100.Rdata")
 get(load("~/data/output/INLA_modelling/Gamma_shannon_topo_res100.Rdata"))
 
@@ -266,6 +252,8 @@ Gamma_shannon_topo_res200 <- inla(formula,
                            family = "gamma",
                            data = data,
                            control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+
+summary(Gamma_shannon_topo_res200)
 
 save(Gamma_shannon_topo_res200, file="~/data/output/INLA_modelling/Gamma_shannon_topo_res200.Rdata")
 get(load("~/data/output/INLA_modelling/Gamma_shannon_topo_res200.Rdata"))
@@ -445,22 +433,171 @@ sd_topo_plot_trans <- Gamma_shannon_topo_df_trans %>%
   mutate(est= factor(est, levels= c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution"))) %>% 
   ggplot() + 
   geom_pointrange(aes(x = factor(est), y = mean, ymin = lower, ymax = upper), position = position_dodge(0.5)) +
-  xlab("coefficient sd(topography)") +
-  ylab("Estimate")+
+  labs(title = expression(paste("Model estimates of ", sigma, "(elevation) on the estimate Shannon index")),
+       x = "Resolution",
+       y = "Coefficient Estimate",
+       caption = "Models fit with INLA. Error bars show the 95% confidence interval.")+
   coord_flip()+
   theme_bw()+
-  geom_vline(xintercept = 0, linetype='longdash', col="red")
+  geom_hline(yintercept = as.numeric(1), linetype='longdash', col="red", alpha=0.5)
 sd_topo_plot_trans
+geom_vline(data=ev,aes(xintercept=as.numeric(dt)))
 
 par(mfrow=c(1,2))
 sd_topo_plot
 sd_topo_plot_trans
 plot_grid(sd_topo_plot, sd_topo_plot_trans)
 
+library(sjPlot)
+plot_model(Gamma_shannon_topo_res100)
+
+
+#################
+# sd(ele) with 10m aggregated data
+#################
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 10, "PC1278", sep="_"))
+Elev <- rast(paste("~/data/ArcDEM/sd_ele_agg10_", 10, "_res.tif", sep=""))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Elev_matrix <- as.matrix(Elev, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+e <- inla.matrix2vector(Elev_matrix)
+table(is.na(Elev_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, topo = e, node=node)
+data <- data[-c(which(is.na(s))),]
+
+formula= Shannon_index ~ 1+ topo+
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_topo_agg10_res100 <- inla(formula,     
+                                  family = "gamma",
+                                  data = data,
+                                  control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+
+summary(Gamma_shannon_topo_agg10_res100)
+save(Gamma_shannon_topo_agg10_res100, file="~/data/output/INLA_modelling/Gamma_shannon_topo_agg10_res100.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_topo_agg10_res100.Rdata"))
+
+# 200m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 20, "PC1278", sep="_"))
+Elev <- rast(paste("~/data/ArcDEM/sd_ele_agg10_", 20, "_res.tif", sep=""))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Elev_matrix <- as.matrix(Elev, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+e <- inla.matrix2vector(Elev_matrix)
+table(is.na(Elev_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, topo = e, node=node)
+data <- data[-c(which(is.na(s))),]
+
+formula= Shannon_index ~ 1+ topo+
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_topo_agg10_res200 <- inla(formula,     
+                                        family = "gamma",
+                                        data = data,
+                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+
+summary(Gamma_shannon_topo_agg10_res200)
+save(Gamma_shannon_topo_agg10_res200, file="~/data/output/INLA_modelling/Gamma_shannon_topo_agg10_res200.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_topo_agg10_res200.Rdata"))
+
+
+# 300m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 30, "PC1278", sep="_"))
+Elev <- rast(paste("~/data/ArcDEM/sd_ele_agg10_", 30, "_res.tif", sep=""))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Elev_matrix <- as.matrix(Elev, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+e <- inla.matrix2vector(Elev_matrix)
+table(is.na(Elev_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, topo = e, node=node)
+data <- data[-c(which(is.na(s))),]
+
+formula= Shannon_index ~ 1+ topo+
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_topo_agg10_res300 <- inla(formula,     
+                                        family = "gamma",
+                                        data = data,
+                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+
+summary(Gamma_shannon_topo_agg10_res300)
+save(Gamma_shannon_topo_agg10_res300, file="~/data/output/INLA_modelling/Gamma_shannon_topo_agg10_res300.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_topo_agg10_res200.Rdata"))
+
+# 1000m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 100, "PC1278", sep="_"))
+Elev <- rast(paste("~/data/ArcDEM/sd_ele_agg10_", 100, "_res.tif", sep=""))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Elev_matrix <- as.matrix(Elev, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+e <- inla.matrix2vector(Elev_matrix)
+table(is.na(Elev_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, topo = e, node=node)
+data <- data[-c(which(is.na(s))),]
+
+formula= Shannon_index ~ 1+ topo+
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_topo_agg10_res1000 <- inla(formula,     
+                                        family = "gamma",
+                                        data = data,
+                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+
+summary(Gamma_shannon_topo_agg10_res1000)
+save(Gamma_shannon_topo_agg10_res1000, file="~/data/output/INLA_modelling/Gamma_shannon_topo_agg10_res1000.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_topo_agg10_res500.Rdata"))
+
+# 500m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 50, "PC1278", sep="_"))
+Elev <- rast(paste("~/data/ArcDEM/sd_ele_agg10_", 50, "_res.tif", sep=""))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Elev_matrix <- as.matrix(Elev, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+e <- inla.matrix2vector(Elev_matrix)
+table(is.na(Elev_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, topo = e, node=node)
+data <- data[-c(which(is.na(s))),]
+
+formula= Shannon_index ~ 1+ topo+
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_topo_agg10_res500 <- inla(formula,     
+                                        family = "gamma",
+                                        data = data,
+                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+
+summary(Gamma_shannon_topo_agg10_res500)
+save(Gamma_shannon_topo_agg10_res500, file="~/data/output/INLA_modelling/Gamma_shannon_topo_agg10_res500.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_topo_agg10_res200.Rdata"))
 
 
 ##################
-# simple glm regression
+# simple glm regression for sd(elevation)
 ##################
 # Generate some negative log data with some gaussian noise
 # 3 samples per data point
@@ -765,8 +902,1407 @@ res_1000_plot_pred <- res_1000_plot +
             colour = "blue")
 res_1000_plot_pred
 
-
-
 plot_grid(res_100_plot_pred, res_200_plot_pred, res_300_plot_pred, res_500_plot_pred, res_1000_plot_pred)
+
+####################
+# modelling with slope and aspect
+####################
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 10, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Elev <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 10, "_res.tif", sep=""))
+Elev_matrix <- as.matrix(Elev, wide=T)
+Slope <- rast("~/data/ArcDEM/mean_slope_masked_10_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+max_ele <- rast("~/data/ArcDEM/max_ele_masked_10_res.tif")
+max_ele_matrix <- as.matrix(max_ele, wide=T)
+Aspect <- rast("~/data/ArcDEM/mean_aspect_masked_10_res.tif")
+Aspect_matrix <- as.matrix(Aspect, wide=T)
+m <- c(0, 45, 1,
+      45, 135, 2,
+      135, 225, 3,
+      225, 315, 4,
+      315, 360, 1)
+rclmat <- matrix(m, ncol=3, byrow = T)
+Aspect_class <- classify(Aspect, rclmat)
+plot(Aspect_class)
+Aspect_class_matrix <- as.matrix(Aspect_class, wide=T)
+as_c <- inla.matrix2vector(Aspect_class_matrix)
+hist(as_c)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+as <- inla.matrix2vector(Aspect_matrix)
+e <- inla.matrix2vector(Elev_matrix)
+max_e <- inla.matrix2vector(max_ele_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+table(is.na(Aspect_matrix))
+table(is.na(Elev_matrix))
+table(is.na(max_ele_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, topo=e, max_ele= max_e, slope = sl, aspect=as, aspect_class = as_c, node=node)
+data <- data[-c(which(is.na(s))),]
+data$aspect_class <- as.factor(data$aspect_class)
+hist(data$slope)
+hist(data$aspect)
+hist(data$max_ele)
+
+plot(data$Shannon_index~data$slope)
+plot(data$Shannon_index~log(data$slope))
+plot(data$Shannon_index~data$aspect)
+plot(data$Shannon_index~data$slope, col=data$aspect_class)
+plot(data$Shannon_index~data$max_ele)
+plot(data$topo~data$slope)
+abline(0,1,col="red")
+
+formula= Shannon_index ~ 1+ slope+
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+
+Gamma_shannon_slope_res_100 <- inla(formula,     
+                           family = "gamma",
+                           data = data,
+                           control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+
+summary(Gamma_shannon_slope_res_100)
+summary(Gamma_shannon_topo_res100)
+
+
+formula= Shannon_index ~ 1 + aspect_class +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_aspect_class_res_100 <- inla(formula,     
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_aspect_class_res_100)
+
+
+formula= Shannon_index ~ 1 + slope + aspect_class + slope:aspect_class+
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_aspect_class_res_100 <- inla(formula,     
+                                           family = "gamma",
+                                           data = data,
+                                           control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+
+
+formula= Shannon_index ~ 1 + topo + slope + aspect+
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_ele_slope_aspect_res_100 <- inla(formula,     
+                                           family = "gamma",
+                                           data = data,
+                                           control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_ele_slope_aspect_res_100)
+
+
+formula= Shannon_index ~ 1 + slope+
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_slope_res_100 <- inla(formula,
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_slope_res_100)
+
+
+
+formula= Shannon_index ~ 1 + slope + topo +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_ele_slope_res_100 <- inla(formula,
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_ele_slope_res_100)
+
+
+save(Gamma_shannon_ele_slope_res_100, file="~/data/output/INLA_modelling/Gamma_shannon_topo_meanslope_res100.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_topo_meanslope_res100.Rdata"))
+
+#############
+# model with mean slope and topography
+#############
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 20, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Elev <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 20, "_res.tif", sep=""))
+Elev_matrix <- as.matrix(Elev, wide=T)
+Mean_ele <- Elev <- rast(paste("~/data/ArcDEM/mean_ele_masked_", 20, "_res.tif", sep=""))
+Mean_ele_matrix <- as.matrix(Mean_ele, wide=T)
+Slope <- rast("~/data/ArcDEM/mean_slope_masked_20_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+e <- inla.matrix2vector(Elev_matrix)
+me <- inla.matrix2vector(Mean_ele_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+table(is.na(Elev_matrix))
+table(is.na(Mean_ele_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, topo=e, mean_ele = me, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+data$topo_by_mean <- data$topo/data$mean_ele
+data$slope_by_mean <- data$slope/data$mean_ele
+hist(data$slope)
+hist(data$topo_by_mean)
+hist(data$topo)
+formula= Shannon_index ~ 1 + slope + topo +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_ele_slope_res_200 <- inla(formula,
+                                        family = "gamma",
+                                        data = data,
+                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_ele_slope_res_200)
+
+save(Gamma_shannon_ele_slope_res_200, file="~/data/output/INLA_modelling/Gamma_shannon_ele_slope_res_200.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_ele_slope_res_200.Rdata"))
+
+glm_slope_topo <- glm(Shannon_index ~ 1 + topo+slope, family = Gamma(link = "log"), data = data)
+summary(glm_slope_topo)
+
+## 300m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 30, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Elev <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 30, "_res.tif", sep=""))
+Elev_matrix <- as.matrix(Elev, wide=T)
+Slope <- rast("~/data/ArcDEM/mean_slope_masked_30_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+e <- inla.matrix2vector(Elev_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+table(is.na(Elev_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, topo=e, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+hist(data$slope)
+formula= Shannon_index ~ 1 + slope + topo +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_ele_slope_res_300 <- inla(formula,
+                                        family = "gamma",
+                                        data = data,
+                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_ele_slope_res_300)
+
+save(Gamma_shannon_ele_slope_res_300, file="~/data/output/INLA_modelling/Gamma_shannon_ele_slope_res_300.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_ele_slope_res_300.Rdata"))
+
+## 500m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 50, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Elev <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 50, "_res.tif", sep=""))
+Elev_matrix <- as.matrix(Elev, wide=T)
+Slope <- rast("~/data/ArcDEM/mean_slope_masked_50_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+e <- inla.matrix2vector(Elev_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+table(is.na(Elev_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, topo=e, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+hist(data$slope)
+formula= Shannon_index ~ 1 + slope + topo +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_ele_slope_res_500 <- inla(formula,
+                                        family = "gamma",
+                                        data = data,
+                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_ele_slope_res_500)
+
+save(Gamma_shannon_ele_slope_res_500, file="~/data/output/INLA_modelling/Gamma_shannon_ele_slope_res_500.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_ele_slope_res_500.Rdata"))
+
+## 1000m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 100, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Elev <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 100, "_res.tif", sep=""))
+Elev_matrix <- as.matrix(Elev, wide=T)
+Slope <- rast("~/data/ArcDEM/mean_slope_masked_100_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+e <- inla.matrix2vector(Elev_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+table(is.na(Elev_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, topo=e, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+hist(data$slope)
+formula= Shannon_index ~ 1 + slope + topo +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_ele_slope_res_1000 <- inla(formula,
+                                        family = "gamma",
+                                        data = data,
+                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_ele_slope_res_1000)
+
+save(Gamma_shannon_ele_slope_res_1000, file="~/data/output/INLA_modelling/Gamma_shannon_ele_slope_res_1000.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_ele_slope_res_500.Rdata"))
+
+
+# plotting
+Slope_df <- rbind(Gamma_shannon_ele_slope_res_100$summary.fixed[2,c(1,3,5)],
+Gamma_shannon_ele_slope_res_200$summary.fixed[2,c(1,3,5)],
+Gamma_shannon_ele_slope_res_300$summary.fixed[2,c(1,3,5)],
+Gamma_shannon_ele_slope_res_500$summary.fixed[2,c(1,3,5)],
+Gamma_shannon_ele_slope_res_1000$summary.fixed[2,c(1,3,5)])
+est <- c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution")
+Slope_df <- bind_cols(as.factor(est), Slope_df)
+Slope_df$model <- "model_slope"
+
+sd_topo_df <- rbind(Gamma_shannon_ele_slope_res_100$summary.fixed[3,c(1,3,5)],
+                  Gamma_shannon_ele_slope_res_200$summary.fixed[3,c(1,3,5)],
+                  Gamma_shannon_ele_slope_res_300$summary.fixed[3,c(1,3,5)],
+                  Gamma_shannon_ele_slope_res_500$summary.fixed[3,c(1,3,5)],
+                  Gamma_shannon_ele_slope_res_1000$summary.fixed[3,c(1,3,5)])
+est <- c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution")
+sd_topo_df <- bind_cols(as.factor(est), sd_topo_df)
+sd_topo_df$model <- "model_topo"
+slope_n_topo <- rbind(sd_topo_df, Slope_df)
+colnames(slope_n_topo)[3:4] <- c("lower", "upper")
+
+ggplot(data = slope_n_topo, 
+       aes(x = mean, y = ...1, xmin = lower, xmax = upper, 
+           color = model)) +
+  geom_pointrange() +
+  labs(title = "Model Estimates of Brain and Body Weight on REM Sleep",
+       x = "Coefficient Estimate",
+       y = "Predictor",
+       caption = "Models fit with OLS. Error bars show the 95% confidence interval.") 
+# +
+#   scale_y_discrete(labels = c("Intercept", "Body Weight", "Brain Weight"))
+
+sd_topo_plot <- slope_n_topo %>% 
+  mutate(est= factor(est, levels= c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution"))) %>% 
+  ggplot() + 
+  geom_pointrange(aes(x = factor(est), y = mean, ymin = lower, ymax = upper), position = position_dodge(0.5)) +
+  xlab("") +
+  ylab("")+
+  coord_flip()+
+  geom_vline(xintercept = 0, linetype='longdash', col="red")+
+  theme_bw()
+
+sd_topo_plot
+
+sd_topo_plot_trans <- Gamma_shannon_topo_df_trans %>% 
+  mutate(est= factor(est, levels= c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution"))) %>% 
+  ggplot() + 
+  geom_pointrange(aes(x = factor(est), y = mean, ymin = lower, ymax = upper), position = position_dodge(0.5)) +
+  xlab("coefficient sd(topography)") +
+  ylab("Estimate")+
+  coord_flip()+
+  theme_bw()+
+  geom_hline(yintercept = as.numeric(1), linetype='longdash', col="red", alpha=0.5)
+sd_topo_plot_trans
+geom_vline(data=ev,aes(xintercept=as.numeric(dt)))
+
+par(mfrow=c(1,2))
+sd_topo_plot
+sd_topo_plot_trans
+plot_grid(sd_topo_plot, sd_topo_plot_trans)
+
+
+################
+# model with max elevation
+################
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 10, "PC1278", sep="_"))
+max_ele <- rast("~/data/ArcDEM/max_ele_masked_10_res.tif")
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+max_ele_matrix <- as.matrix(max_ele, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+max <- inla.matrix2vector(max_ele_matrix)
+table(is.na(max_ele_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, max = max, node=node)
+data <- data[-c(which(is.na(s))),]
+
+formula= Shannon_index ~ 1 + max +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+
+Gamma_shannon_max_ele_res_100 <- inla(formula,     
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_max_ele_res_100)
+
+glm_res100_shannon_maxele_identity <- glm(Shannon_index ~ 1 + max_ele, family = Gamma(link = "identity"), data = data)
+summary(glm_res100_shannon_maxele_identity)
+
+summary(glm(Shannon_index~1+topo+slope, family = Gamma(link = "log"), data = data))
+
+
+################
+# model with mean slope only
+################
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 10, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Slope <- rast("~/data/ArcDEM/mean_slope_masked_10_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_slope_res_100 <- inla(formula,     
+                                      family = "gamma",
+                                      data = data,
+                                      control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_slope_res_100)
+save(Gamma_shannon_slope_res_100, file="~/data/output/INLA_modelling/Gamma_shannon_slope_res_100.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_ele_slope_res_100.Rdata"))
+
+# 200m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 20, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Slope <- rast("~/data/ArcDEM/mean_slope_masked_20_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_slope_res_200 <- inla(formula,     
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_slope_res_200)
+save(Gamma_shannon_slope_res_200, file="~/data/output/INLA_modelling/Gamma_shannon_slope_res_200.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_ele_slope_res_200.Rdata"))
+
+# 300m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 30, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Slope <- rast("~/data/ArcDEM/mean_slope_masked_30_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_slope_res_300 <- inla(formula,     
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_slope_res_300)
+save(Gamma_shannon_slope_res_300, file="~/data/output/INLA_modelling/Gamma_shannon_slope_res_300.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_slope_res_300.Rdata"))
+
+
+# 500
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 50, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Slope <- rast("~/data/ArcDEM/mean_slope_masked_50_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_slope_res_500 <- inla(formula,     
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_slope_res_500)
+save(Gamma_shannon_slope_res_500, file="~/data/output/INLA_modelling/Gamma_shannon_slope_res_500.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_slope_res_500.Rdata"))
+
+
+# 1000m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 100, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Slope <- rast("~/data/ArcDEM/mean_slope_masked_100_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_slope_res_1000 <- inla(formula,     
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_slope_res_1000)
+save(Gamma_shannon_slope_res_1000, file="~/data/output/INLA_modelling/Gamma_shannon_slope_res_1000.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_slope_res_1000.Rdata"))
+
+# plotting
+
+Slope_df <- rbind(Gamma_shannon_slope_res_100$summary.fixed[2,c(1,3,5)],
+                  Gamma_shannon_slope_res_200$summary.fixed[2,c(1,3,5)],
+                  Gamma_shannon_slope_res_300$summary.fixed[2,c(1,3,5)],
+                  Gamma_shannon_slope_res_500$summary.fixed[2,c(1,3,5)],
+                  Gamma_shannon_slope_res_1000$summary.fixed[2,c(1,3,5)])
+est <- c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution")
+Slope_df <- cbind(as.factor(est), Slope_df)
+colnames(Slope_df)[c(1,3:4)] <- c("resolution","lower", "upper")
+Slope_df[,2:4] <- exp(Slope_df[,2:4])
+Slope_df$resolution <- factor(Slope_df$resolution, levels = c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution"))
+
+mean_slope_plot_trans <- ggplot(data = Slope_df, 
+       aes(x = mean, y = resolution, xmin = lower, xmax = upper)) +
+  geom_pointrange() +
+  labs(title = "Model Estimates of mean slope on estimated Shannon index",
+       x = "Coefficient Estimate",
+       y = "resolution",
+       caption = "Models fit with INLA. Error bars show the 95% confidence interval.")+
+  coord_cartesian(xlim = c(0.982, 1))+
+  geom_vline(xintercept = as.numeric(1), linetype='longdash', col="red", alpha=0.5)+
+  theme_bw()
+  
+# +
+#   scale_y_discrete(labels = c("Intercept", "Body Weight", "Brain Weight"))
+
+
+#################
+# Model with coefficient of variation
+#################
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 10, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Elev <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 10, "_res.tif", sep=""))
+Elev_matrix <- as.matrix(Elev, wide=T)
+Mean_ele <- Elev <- rast(paste("~/data/ArcDEM/mean_ele_masked_", 10, "_res.tif", sep=""))
+Mean_ele_matrix <- as.matrix(Mean_ele, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+e <- inla.matrix2vector(Elev_matrix)
+me <- inla.matrix2vector(Mean_ele_matrix)
+table(is.na(Shannon_matrix))
+table(is.na(Elev_matrix))
+table(is.na(Mean_ele_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, topo=e, mean_ele = me, node=node)
+data <- data[-c(which(is.na(s))),]
+data$coeff_var <- data$topo/data$mean_ele
+data <- data[-11798,] 
+plot(data$Shannon_index~data$coeff_var)
+
+formula= Shannon_index ~ 1 + coeff_var +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_coeffvar_res_100 <- inla(formula,     
+                                     family = "gamma",
+                                     data = data,
+                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+
+summary(Gamma_shannon_coeffvar_res_100)
+save(Gamma_shannon_coeffvar_res_100, file="~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_100.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_100.Rdata"))
+
+
+formula= Shannon_index ~ 1 + mean_ele +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_mean_ele_res_100 <- inla(formula,     
+                                       family = "gamma",
+                                       data = data,
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+save(Gamma_shannon_mean_ele_res_100, file="~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_100.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_100.Rdata"))
+
+
+
+# 200
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 20, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Elev <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 20, "_res.tif", sep=""))
+Elev_matrix <- as.matrix(Elev, wide=T)
+Mean_ele <- Elev <- rast(paste("~/data/ArcDEM/mean_ele_masked_", 20, "_res.tif", sep=""))
+Mean_ele_matrix <- as.matrix(Mean_ele, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+e <- inla.matrix2vector(Elev_matrix)
+me <- inla.matrix2vector(Mean_ele_matrix)
+table(is.na(Shannon_matrix))
+table(is.na(Elev_matrix))
+table(is.na(Mean_ele_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, topo=e, mean_ele = me, node=node)
+data <- data[-c(which(is.na(s))),]
+data$coeff_var <- data$topo/data$mean_ele
+
+formula= Shannon_index ~ 1 + coeff_var +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_coeffvar_res_200 <- inla(formula,     
+                                       family = "gamma",
+                                       data = data,
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+
+summary(Gamma_shannon_coeffvar_res_200)
+save(Gamma_shannon_coeffvar_res_200, file="~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_200.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_200.Rdata"))
+
+
+formula= Shannon_index ~ 1 + mean_ele +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_mean_ele_res_200 <- inla(formula,     
+                                       family = "gamma",
+                                       data = data,
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+save(Gamma_shannon_mean_ele_res_200, file="~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_200.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_200.Rdata"))
+
+
+# 300
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 30, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Elev <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 30, "_res.tif", sep=""))
+Elev_matrix <- as.matrix(Elev, wide=T)
+Mean_ele <- Elev <- rast(paste("~/data/ArcDEM/mean_ele_masked_", 30, "_res.tif", sep=""))
+Mean_ele_matrix <- as.matrix(Mean_ele, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+e <- inla.matrix2vector(Elev_matrix)
+me <- inla.matrix2vector(Mean_ele_matrix)
+table(is.na(Shannon_matrix))
+table(is.na(Elev_matrix))
+table(is.na(Mean_ele_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, topo=e, mean_ele = me, node=node)
+data <- data[-c(which(is.na(s))),]
+data$coeff_var <- data$topo/data$mean_ele
+
+formula= Shannon_index ~ 1 + coeff_var +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_coeffvar_res_300 <- inla(formula,     
+                                       family = "gamma",
+                                       data = data,
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+
+summary(Gamma_shannon_coeffvar_res_300)
+save(Gamma_shannon_coeffvar_res_300, file="~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_300.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_300.Rdata"))
+
+
+formula= Shannon_index ~ 1 + mean_ele +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_mean_ele_res_300 <- inla(formula,     
+                                       family = "gamma",
+                                       data = data,
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+save(Gamma_shannon_mean_ele_res_300, file="~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_300.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_300.Rdata"))
+
+
+# 500
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 50, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Elev <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 50, "_res.tif", sep=""))
+Elev_matrix <- as.matrix(Elev, wide=T)
+Mean_ele <- Elev <- rast(paste("~/data/ArcDEM/mean_ele_masked_", 50, "_res.tif", sep=""))
+Mean_ele_matrix <- as.matrix(Mean_ele, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+e <- inla.matrix2vector(Elev_matrix)
+me <- inla.matrix2vector(Mean_ele_matrix)
+table(is.na(Shannon_matrix))
+table(is.na(Elev_matrix))
+table(is.na(Mean_ele_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, topo=e, mean_ele = me, node=node)
+data <- data[-c(which(is.na(s))),]
+data$coeff_var <- data$topo/data$mean_ele
+
+formula= Shannon_index ~ 1 + coeff_var +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_coeffvar_res_500 <- inla(formula,     
+                                       family = "gamma",
+                                       data = data,
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+
+summary(Gamma_shannon_coeffvar_res_500)
+save(Gamma_shannon_coeffvar_res_500, file="~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_500.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_500.Rdata"))
+
+
+formula= Shannon_index ~ 1 + mean_ele +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_mean_ele_res_500 <- inla(formula,     
+                                       family = "gamma",
+                                       data = data,
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+save(Gamma_shannon_mean_ele_res_500, file="~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_500.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_500.Rdata"))
+
+
+# 1000
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 100, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Elev <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 100, "_res.tif", sep=""))
+Elev_matrix <- as.matrix(Elev, wide=T)
+Mean_ele <- Elev <- rast(paste("~/data/ArcDEM/mean_ele_masked_", 100, "_res.tif", sep=""))
+Mean_ele_matrix <- as.matrix(Mean_ele, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+e <- inla.matrix2vector(Elev_matrix)
+me <- inla.matrix2vector(Mean_ele_matrix)
+table(is.na(Shannon_matrix))
+table(is.na(Elev_matrix))
+table(is.na(Mean_ele_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, topo=e, mean_ele = me, node=node)
+data <- data[-c(which(is.na(s))),]
+data$coeff_var <- data$topo/data$mean_ele
+
+formula= Shannon_index ~ 1 + coeff_var +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_coeffvar_res_1000 <- inla(formula,     
+                                       family = "gamma",
+                                       data = data,
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+
+summary(Gamma_shannon_coeffvar_res_1000)
+save(Gamma_shannon_coeffvar_res_1000, file="~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_1000.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_1000.Rdata"))
+
+formula= Shannon_index ~ 1 + mean_ele +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_mean_ele_res_1000 <- inla(formula,     
+                                       family = "gamma",
+                                       data = data,
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+save(Gamma_shannon_mean_ele_res_1000, file="~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_1000.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_1000.Rdata"))
+
+
+#######
+# link topography and sd(slope)
+#######
+topo_10 <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 10, "_res.tif", sep=""))
+slope_10 <- rast("~/data/ArcDEM/mean_slope_masked_10_res.tif")
+topo_20 <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 20, "_res.tif", sep=""))
+slope_20 <- rast("~/data/ArcDEM/mean_slope_masked_20_res.tif")
+topo_30 <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 30, "_res.tif", sep=""))
+slope_30 <- rast("~/data/ArcDEM/mean_slope_masked_30_res.tif")
+topo_50 <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 50, "_res.tif", sep=""))
+slope_50 <- rast("~/data/ArcDEM/mean_slope_masked_50_res.tif")
+topo_100 <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 100, "_res.tif", sep=""))
+slope_100 <- rast("~/data/ArcDEM/mean_slope_masked_100_res.tif")
+plot(topo_10)
+plot(slope_10)
+plot(topo_20)
+plot(slope_20)
+plot(topo_30)
+plot(slope_30)
+plot(topo_50)
+plot(slope_50)
+plot(topo_100)
+plot(slope_100)
+
+
+
+##############
+# Model with sd(slope), including glm plotting
+##############
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 10, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Slope <- rast("~/data/ArcDEM/sd_slope_masked_10_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_sd_slope_res_100 <- inla(formula,     
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_sd_slope_res_100)
+save(Gamma_shannon_sd_slope_res_100, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_100.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_100.Rdata"))
+
+# glm plotting
+res_100_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
+summary(res_100_glm)
+(res_100_plot <- ggplot(
+  data,
+  aes(x = slope, y = Shannon_index)) +
+    geom_point(shape=21) +
+    scale_y_continuous(limits = c(1, 4)) +
+    labs(x = "sd(slope)", y="Shannon index", title = "100m resolution")+
+    theme_cowplot())
+
+res_100_pred <- predict(
+  res_100_glm,
+  newdata = data.frame(slope = seq(0, 15, 0.01)),
+  type = "response"
+)
+
+res_100_pred_df <- data.frame(
+  slope = seq(0,15,0.01),
+  Shannon_index = res_100_pred
+)
+res_100_plot_pred <- res_100_plot +
+  geom_line(data = res_100_pred_df, 
+            colour = "blue")
+res_100_plot_pred
+
+
+# 200m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 20, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Slope <- rast("~/data/ArcDEM/sd_slope_masked_20_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_sd_slope_res_200 <- inla(formula,     
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_sd_slope_res_200)
+save(Gamma_shannon_sd_slope_res_200, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_200.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_200.Rdata"))
+
+# glm plotting
+res_200_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
+summary(res_200_glm)
+(res_200_plot <- ggplot(
+  data,
+  aes(x = slope, y = Shannon_index)) +
+    geom_point(shape=21) +
+    scale_y_continuous(limits = c(1, 4)) +
+    labs(x = "sd(slope)", y="Shannon index", title = "200m resolution")+
+    theme_cowplot())
+range(data$slope)
+res_200_pred <- predict(
+  res_200_glm,
+  newdata = data.frame(slope = seq(0, 15, 0.01)),
+  type = "response"
+)
+
+res_200_pred_df <- data.frame(
+  slope = seq(0,15,0.01),
+  Shannon_index = res_200_pred
+)
+res_200_plot_pred <- res_200_plot +
+  geom_line(data = res_200_pred_df, 
+            colour = "blue")
+res_200_plot_pred
+
+
+
+# 300m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 30, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Slope <- rast("~/data/ArcDEM/sd_slope_masked_30_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_sd_slope_res_300 <- inla(formula,     
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_sd_slope_res_300)
+save(Gamma_shannon_sd_slope_res_300, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_300.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_300.Rdata"))
+
+
+# glm plotting
+res_300_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
+summary(res_300_glm)
+(res_300_plot <- ggplot(
+  data,
+  aes(x = slope, y = Shannon_index)) +
+    geom_point(shape=21) +
+    scale_y_continuous(limits = c(1, 4)) +
+    labs(x = "sd(slope)", y="Shannon index", title = "300m resolution")+
+    theme_cowplot())
+range(data$slope)
+res_300_pred <- predict(
+  res_300_glm,
+  newdata = data.frame(slope = seq(0, 15, 0.01)),
+  type = "response"
+)
+
+res_300_pred_df <- data.frame(
+  slope = seq(0,15,0.01),
+  Shannon_index = res_300_pred
+)
+res_300_plot_pred <- res_300_plot +
+  geom_line(data = res_300_pred_df, 
+            colour = "blue")
+res_300_plot_pred
+
+# 500
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 50, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Slope <- rast("~/data/ArcDEM/sd_slope_masked_50_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_sd_slope_res_500 <- inla(formula,     
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_sd_slope_res_500)
+save(Gamma_shannon_sd_slope_res_500, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_500.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_500.Rdata"))
+
+
+# glm plotting
+res_500_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
+summary(res_500_glm)
+(res_500_plot <- ggplot(
+  data,
+  aes(x = slope, y = Shannon_index)) +
+    geom_point(shape=21) +
+    scale_y_continuous(limits = c(1, 4)) +
+    labs(x = "sd(slope)", y="Shannon index", title = "500m resolution")+
+    theme_cowplot())
+range(data$slope)
+res_500_pred <- predict(
+  res_500_glm,
+  newdata = data.frame(slope = seq(0, 15, 0.01)),
+  type = "response"
+)
+
+res_500_pred_df <- data.frame(
+  slope = seq(0,15,0.01),
+  Shannon_index = res_500_pred
+)
+res_500_plot_pred <- res_500_plot +
+  geom_line(data = res_500_pred_df, 
+            colour = "blue")
+res_500_plot_pred
+
+# 1000m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 100, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Slope <- rast("~/data/ArcDEM/sd_slope_masked_100_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_sd_slope_res_1000 <- inla(formula,     
+                                     family = "gamma",
+                                     data = data,
+                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_sd_slope_res_1000)
+save(Gamma_shannon_sd_slope_res_1000, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_1000.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_1000.Rdata"))
+
+# glm plotting
+res_1000_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
+summary(res_1000_glm)
+(res_1000_plot <- ggplot(
+  data,
+  aes(x = slope, y = Shannon_index)) +
+    geom_point(shape=21) +
+    scale_y_continuous(limits = c(1, 4)) +
+    labs(x = "sd(slope)", y="Shannon index", title = "1000m resolution")+
+    theme_cowplot())
+range(data$slope)
+res_1000_pred <- predict(
+  res_1000_glm,
+  newdata = data.frame(slope = seq(0, 15, 0.01)),
+  type = "response"
+)
+
+res_1000_pred_df <- data.frame(
+  slope = seq(0,15,0.01),
+  Shannon_index = res_1000_pred
+)
+res_1000_plot_pred <- res_1000_plot +
+  geom_line(data = res_1000_pred_df, 
+            colour = "blue")
+res_1000_plot_pred
+
+
+# inla coefficient plotting
+Sd_slope_df <- rbind(Gamma_shannon_sd_slope_res_100$summary.fixed[2,c(1,3,5)],
+                     Gamma_shannon_sd_slope_res_200$summary.fixed[2,c(1,3,5)],
+                     Gamma_shannon_sd_slope_res_300$summary.fixed[2,c(1,3,5)],
+                     Gamma_shannon_sd_slope_res_500$summary.fixed[2,c(1,3,5)],
+                     Gamma_shannon_sd_slope_res_1000$summary.fixed[2,c(1,3,5)])
+est <- c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution")
+Sd_slope_df <- cbind(as.factor(est), Sd_slope_df)
+colnames(Sd_slope_df)[c(1,3:4)] <- c("resolution","lower", "upper")
+Sd_slope_df[2:4] <- exp(Sd_slope_df[2:4])
+Sd_slope_df$resolution <- factor(Sd_slope_df$resolution, levels = c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution"))
+sd_slope_plot_trans <- ggplot(data = Sd_slope_df, 
+       aes(x = mean, y = resolution, xmin = lower, xmax = upper)) +
+  geom_pointrange() +
+  labs(title = expression(paste("Model estimate of ", sigma, "(slope) on the estimate Shannon index")),
+       x = "Coefficient Estimate",
+       y = "Resolution",
+       caption = "Models fit with INLA. Error bars show the 95% confidence interval.")+
+  geom_vline(xintercept = as.numeric(1), col="red", alpha=0.5, lty="dashed")+
+  theme_bw()
+# +
+#   scale_y_discrete(labels = c("Intercept", "Body Weight", "Brain Weight"))
+
+
+plot_grid(sd_topo_plot_trans, sd_slope_plot_trans)
+plot_grid(sd_topo_plot_trans, mean_slope_plot_trans)
+
+# glm plotting 
+plot_grid(res_100_plot_pred, res_200_plot_pred, res_300_plot_pred, res_500_plot_pred, res_1000_plot_pred)
+
+
+# vizualisation at 100m of the shannon and sd slop maps
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 10, "PC1278", sep="_"))
+Slope <- rast("~/data/ArcDEM/sd_slope_masked_10_res.tif")
+
+viridis_colors <- viridis::plasma(20)
+na_col <- grey(0.8, alpha=0.5)
+m <- ggplot() +
+  geom_spatraster(data = Shannon, na.rm = TRUE, aes(fill=Shannon_10_PC1278))+ #need to change the fill variable
+  # theme_map()+
+  theme_minimal()+
+  scale_fill_gradientn(colours = viridis_colors, na.value = na_col) +
+  labs(fill = substitute(paste("Shannon index", italic("H'"))))
+m  
+map_div <- m+
+  ggspatial::annotation_north_arrow(
+    location = "bl", which_north = "true",
+    pad_x = unit(0.5, "in"), pad_y = unit(0.65, "in"),
+    height = unit(0.7, "cm"),
+    width = unit(0.7, "cm")
+  )+
+  ggspatial::annotation_scale(
+    location = "bl", pad_x = unit(0.5, "in"),
+    pad_y = unit(0.4, "in"), 
+    style="ticks"
+  )
+map_div
+
+viridis_colors <- viridis::plasma(20)
+na_col <- grey(0.8, alpha=0.5)
+sl <- ggplot() +
+  geom_spatraster(data = Slope, na.rm = TRUE, aes(fill=slope))+ #need to change the fill variable
+  # theme_map()+
+  theme_minimal()+
+  # scale_fill_gradientn(colours = terrain.colors(10))+
+  scale_fill_gradientn(colours = viridis_colors[15:1], na.value = na_col) +
+  labs(fill = expression(paste(sigma,"(slope)")))
+sl  
+sl_div <- sl+
+  ggspatial::annotation_north_arrow(
+    location = "bl", which_north = "true",
+    pad_x = unit(0.5, "in"), pad_y = unit(0.65, "in"),
+    height = unit(0.7, "cm"),
+    width = unit(0.7, "cm")
+  )+
+  ggspatial::annotation_scale(
+    location = "bl", pad_x = unit(0.5, "in"),
+    pad_y = unit(0.4, "in"), 
+    style="ticks"
+  )
+sl_div
+
+sent_view <- rast("~/data/output/sent_crop_view.tif")
+plotRGB(sent_view, r=3, g=2, b=1, scale=10000, stretch="lin", smooth=T)
+sent_view_scale <-sent_view/7
+
+s <- ggplot() +
+  geom_spatraster_rgb(data = sent_view_scale, interpolate=T, r=3, g=2, b=1)+
+  # theme_map()+
+  theme_minimal()
+s
+map_truecol <- s+
+  ggspatial::annotation_scale(location="bl", pad_x=unit(0.5, "in"),
+                              pad_y = unit(0.4, "in"), style="ticks", line_col="white", text_col="white")+
+  
+  ggspatial::annotation_north_arrow(location="bl", which_north=T, pad_x=unit(0, "in"),
+                                    pad_y = unit(0.4, "in"), height = unit(0.6, "cm"), width=unit(0.6, "cm"))
+
+map_truecol
+
+cowplot::plot_grid(map_truecol, map_div, sl_div, ncol = 3, axis="r")
+
+
+##########
+# Interaction between sd(elevation) - sd(slope)??? 
+##########
+library(usdm)
+Elev <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 10, "_res.tif", sep=""))
+Slope_mean <- rast("~/data/ArcDEM/mean_slope_masked_10_res.tif")
+Slope_sd <- rast("~/data/ArcDEM/sd_slope_masked_10_res.tif")
+Elev_slope_mean <- c(Elev, Slope_mean)
+Elev_slope_sd <- c(Elev, Slope_sd)
+vif(Elev_slope_mean)
+vif(Elev_slope_sd)
+
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 10, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Elev <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 10, "_res.tif", sep=""))
+Elev_matrix <- as.matrix(Elev, wide=T)
+Slope_sd <- rast("~/data/ArcDEM/sd_slope_masked_10_res.tif")
+Slope_matrix <- as.matrix(Slope_sd, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+e <- inla.matrix2vector(Elev_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+table(is.na(Elev_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, topo=e, slope_sd = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+hist(data$slope_sd)
+hist(data$topo)
+formula= Shannon_index ~ 1 + slope_sd + topo + slope_sd:topo +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_ele_sd_slope_res_100 <- inla(formula,
+                                        family = "gamma",
+                                        data = data,
+                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_ele_sd_slope_res_100)
+# the WAIC and DIC is a bit higher than the simple model => maybe better to just keep the model separate.  
+
+
+library(spatialEco)
+corr_topo_sd_slope <- raster.modified.ttest(Elev, Slope_sd)
+viridis_colors <- viridis::plasma(20)
+plot(corr_topo_sd_slope$corr, type="interval", breaks=c(-1,-0.5,-0.1,0.1,0.5, 1), main="correlation between sd(elevation) and sd(slope)", col=c(viridis_colors[c(4,8,12,16)], "#009200"), plg=list(title="correlation coefficient"))
+
+
+
+############
+# Model with 10m resolution elevation data
+############
+
+# Slope
+# 100m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 10, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Slope <- rast("~/data/ArcDEM/sd_slope_agg10_masked_10_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_sd_slope_res_100 <- inla(formula,     
+                                       family = "gamma",
+                                       data = data,
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_sd_slope_res_100)
+save(Gamma_shannon_sd_slope_res_100, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_agg10_res_100.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_sd_slope_agg10_res_100.Rdata"))
+
+
+# 200m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 20, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Slope <- rast("~/data/ArcDEM/sd_slope_agg10_masked_20_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_sd_slope_res_200 <- inla(formula,     
+                                       family = "gamma",
+                                       data = data,
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_sd_slope_res_200)
+save(Gamma_shannon_sd_slope_res_200, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_agg10_res_200.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_sd_slope_agg10_res_200.Rdata"))
+
+
+# 300m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 30, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Slope <- rast("~/data/ArcDEM/sd_slope_agg10_masked_30_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_sd_slope_res_300 <- inla(formula,     
+                                       family = "gamma",
+                                       data = data,
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_sd_slope_res_300)
+save(Gamma_shannon_sd_slope_res_300, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_agg10_res_300.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_sd_slope_agg10_res_300.Rdata"))
+
+# 500m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 50, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Slope <- rast("~/data/ArcDEM/sd_slope_agg10_masked_50_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_sd_slope_res_500 <- inla(formula,     
+                                       family = "gamma",
+                                       data = data,
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_sd_slope_res_500)
+save(Gamma_shannon_sd_slope_res_500, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_agg10_res_500.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_sd_slope_agg10_res_500.Rdata"))
+
+
+# 1000m
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 100, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+Slope <- rast("~/data/ArcDEM/sd_slope_agg10_masked_100_res.tif")
+Slope_matrix <- as.matrix(Slope, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+sl <- inla.matrix2vector(Slope_matrix)
+table(is.na(Slope_matrix))
+table(is.na(Shannon_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, slope = sl, node=node)
+data <- data[-c(which(is.na(s))),]
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_sd_slope_res_1000 <- inla(formula,     
+                                       family = "gamma",
+                                       data = data,
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_sd_slope_res_1000)
+save(Gamma_shannon_sd_slope_res_1000, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_agg10_res_1000.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_sd_slope_agg10_res_1000.Rdata"))
+
+
+############
+# Model with distance to water
+############
+Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 10, "PC1278", sep="_"))
+Shannon_matrix <- as.matrix(Shannon, wide=T)
+dist <- rast("~/data/biodivmapR_sent/dist_to_water.tif")
+dist_matrix <- as.matrix(dist, wide=T)
+nrow= nrow(Shannon_matrix)
+ncol= ncol(Shannon_matrix)
+n = nrow*ncol
+s = inla.matrix2vector(Shannon_matrix)
+table(is.na(s))
+s[!is.na(s)] <- s[!is.na(s)]+ 1
+d <- inla.matrix2vector(dist_matrix)
+table(is.na(dist_matrix))
+table(is.na(Shannon_matrix))
+node = 1:n
+data <- data.frame(Shannon_index = s, dist = d, node=node)
+data <- data[-c(which(is.na(s))),]
+hist(data$dist)
+plot(data$Shannon_index~data$dist)
+formula= Shannon_index ~ 1 + dist +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_dist_res_100 <- inla(formula,     
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_dist_res_100)
+save(Gamma_shannon_dist_res_100, file="~/data/output/INLA_modelling/Gamma_shannon_dist_res_100.Rdata")
+get(load("~/data/output/INLA_modelling/Gamma_shannon_dist_res_100.Rdata"))
+
+
+
+
+
+
+
+
+
+
 
 
