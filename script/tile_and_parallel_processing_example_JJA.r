@@ -10,6 +10,7 @@ library(terra)
 library(tidyterra)
 library(devtools)
 library(gdalUtils)
+library(pbapply)
 
 setwd("~/data")
 area_interest <- st_read("areas_of_interest.gpkg")
@@ -144,8 +145,8 @@ boundaries <- list.files(path=boundary_dir, pattern="KML", full.names = T)
 ######################
 # make multipolygon from all the flight strip boundaries
 ######################
-
 boundaries_sf <- lapply(boundaries, FUN=st_read)
+
 for(i in 1:length(boundaries_sf)){
   boundaries_sf[[i]] <- st_transform(boundaries_sf[[i]],32613) 
 }
@@ -193,7 +194,7 @@ sf::gdal_utils("warp",
 
 
 ###############
-# Using everything for parallel processing (on li)
+# Using everything for parallel processing (on linux)
 ###############
 library(pbapply)
 library(parallel)
@@ -227,8 +228,8 @@ pblapply(grid_polygons$cell_id,
              sf::gdal_utils("warp", source = update_paths, destination = paste0("/scratch/mpijne/reflectance_data/", cell),
                             options = c("-of", "ENVI", "-t_srs", "epsg:32613",  "-co", "INTERLEAVE=BIL"))
            }
-          }
-          # cl = 4
+          },
+          cl = 4
 )
 
 # check if trial with test file worked: 
@@ -278,8 +279,21 @@ sent_aoi_stack_crop <- rast("output/sent_crop_view.tif")
 temp_rast <- rast(ext(sent_aoi_stack_crop), resolution = res(tile))
 build_area_mask_5res <- resample(build_area_mask, temp_rast, method="near")
 
-pblapply(grid_polygons$cell_id,
+s_paths <- list.files(path="~/scratch/reflectance_data", pattern="^x_")
+s_paths <- s_paths[-c(grep(s_paths, pattern=".hdr"))]
+s_paths <- s_paths[-c(grep(s_paths, pattern=".aux.xml"))]
+s_paths <- s_paths[-c(grep(s_paths, pattern="mask", ignore.case = T))]
+list.files(path="~/scratch/reflectance_data/", pattern="mask")
+list_mask <- list.files(path="~/scratch/reflectance_data", pattern="mask")
+list_mask <- list_mask[-c(grep(list_mask, pattern=".aux.xml|.hdr|_byte"))]
+list_mask <- str_sub(list_mask, -14, -6)
+grep(s_paths, pattern=paste0(list_mask, collapse = "|"))
+s_paths <- s_paths[-c(which(list_mask %in% s_paths))]
+length(s_paths)
+cl=4
+pblapply(s_paths,
          function(cell) {
+           print(cell)
            tile <- rast(file.path("/scratch/mpijne/reflectance_data", cell))
            NIR_average <- mean(tile[[grep(names(tile), pattern = "^8")]])
            # hist(NIR_average, breaks=seq(terra::minmax(NIR_average)[1],terra::minmax(NIR_average)[2]+0.05, by=0.01))
@@ -288,7 +302,7 @@ pblapply(grid_polygons$cell_id,
            NDWI <- (green_average-NIR_average)/(green_average+NIR_average)
            water_mask <- ifel(NDWI>0.1, 0, 1)
            names(tile) <- 1:425
-           cloud_class <- terra::predict(object=tile, model=RF_model)
+           cloud_class <- terra::predict(object=tile, model=RF_model, na.rm=T)
            cloud_mask <- ifel(cloud_class=="cl", 0, 1)
            build_area_mask <- rast("~/data/output/build_are_mask.tif")
            temp_rast <- rast(ext(sent_aoi_stack_crop), resolution = res(tile))
@@ -297,25 +311,223 @@ pblapply(grid_polygons$cell_id,
            mask <- mosaic(shade_mask, water_mask, cloud_mask, building_mask, fun="min")
            # mask <- ifel(mask==0, NA, 1) #is it necessary?
            writeRaster(mask, filename = paste("/scratch/mpijne/reflectance_data/", cell, "_mask", sep=""),filetype="ENVI", gdal="INTERLEAVE=BSQ", overwrite=T, datatype="INT1U")
-                         }
-         cl = cl # the name of your cluster
-)
-
-
-############################
-# parallel processing to create Output_30_PCs
-############################
-pblapply(grid_polygons$cell_id,
-         function(cell) {
-            
-           
-         }
+                         },
+          cl = cl # the name of your cluster
 )
 
 
 
+################
+# creating big aviris file 
+################
+grid_polygons <- st_read("~/data/output/tilling/grid_polygons_aoi.shp")
+s_paths <- list.files(path="~/scratch/reflectance_data", pattern="^x_", full.names = T)
+s_paths <- s_paths[-c(grep(s_paths, pattern=".hdr"))]
+s_paths <- s_paths[-c(grep(s_paths, pattern=".aux.xml"))]
+s_paths <- s_paths[-c(grep(s_paths, pattern="mask", ignore.case = T))]
+length(s_paths)
+# grid_polygons has several polygons in the water for example => without aviris flight strip => less file then 1230
+
+# cat(s_paths,sep="\n", file="~/scratch/reflectance_data/tile_file_list.txt")
+# doesn't work to specify the files as a list in text file.
+
+# create VRT file
+sf::gdal_utils("buildvrt",
+               source = s_paths, 
+               destination = "/home/mpijne/scratch/tiles_VRT.vrt"
+) 
 
 
+sf::gdal_utils("translate",
+               source="/home/mpijne/scratch/tiles_VRT.vrt",
+               destination = "/home/mpijne/scratch/reflectance_data/aviris_aoi_data",
+               options = c(
+                 "-of", "ENVI",
+                 "-co", "INTERLEAVE=BIL"
+               )
+)				
+
+
+#######
+# re-creating part of a flight strip 
+#######
+lab <- str_sub(names(boundaries_multipolygon),15,18)
+site_boundaries <-st_read("~/data/field_work/site_boundaries.gpkg")
+site_boundaries[1,]$site <- "site 1"
+site_1 <- site_boundaries[1,]
+site_1$site <- "Site 1"
+site_2 <- site_boundaries[2,]
+site_3 <- site_boundaries[3,]
+
+
+ggplot(data=boundaries_multipolygon) +
+  geom_sf(
+    # aes(fill = cell_id, alpha=0.1)
+  ) +
+  # geom_sf_label(aes(label=cell_id), cex=0.8)+
+  geom_sf(data=site_boundaries ,aes(fill="red", alpha=0.1))+
+  geom_sf_label(aes(label=lab), cex=1.5)
+
+plot(site_boundaries)
+
+#site 1, flight strip 0708
+
+idx <- c(st_intersects(boundaries_multipolygon$`ang20190802t220708 Outline`, grid_polygons$geometry))
+idx_v <- unlist(idx)
+strip_0708_aoi <- grid_polygons[idx_v,1]
+paths <- paste0("/scratch/mpijne/reflectance_data/", strip_0708_aoi$cell_id)
+sf::gdal_utils("buildvrt",
+               source = paths, 
+               destination = "/home/mpijne/scratch/strip_0708_aoi_VRT.vrt"
+) 
+
+sf::gdal_utils("translate",
+               source="/home/mpijne/scratch/strip_0708_aoi_VRT.vrt",
+               destination = "/home/mpijne/scratch/reflectance_data/strip_0708_aoi",
+               options = c(
+                 "-of", "ENVI",
+                 "-co", "INTERLEAVE=BIL"
+               )
+)
+
+x <- "/home/mpijne/scratch/reflectance_data/strip_0708_aoi"
+bbox <- st_bbox(boundaries_multipolygon$`ang20190802t220708 Outline`)
+sf::gdal_utils("warp",
+               source = x, 
+               destination = paste(x, "crop",sep="_"),
+               options = c(
+                 # outpufile = ENVI file
+                 "-of", "ENVI",
+                 "-t_srs", "epsg:32613",
+                 # target extent (in target crs)
+                 "-te",
+                 bbox[1], # xmin
+                 bbox[2], # ymin
+                 bbox[3], # xmax
+                 bbox[4] # ymax
+               )
+) 
+
+
+cell <- "strip_0708_aoi"
+tile <- rast(file.path("/scratch/mpijne/reflectance_data", cell))
+plotRGB(tile, r=54, g=36, b=20, stretch="lin")
+plot(site_boundaries, add=T)
+RF_model <-readRDS("~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData")
+build_area_mask <- rast("~/data/output/build_are_mask.tif")
+sent_aoi_stack_crop <- rast("output/sent_crop_view.tif")
+temp_rast <- rast(ext(sent_aoi_stack_crop), resolution = res(tile))
+build_area_mask_5res <- resample(build_area_mask, temp_rast, method="near")
+
+NIR_average <- mean(tile[[c(86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105)]])
+hist(NIR_average, breaks=seq(terra::minmax(NIR_average)[1],terra::minmax(NIR_average)[2]+0.05, by=0.01))
+shade_mask <- ifel(NIR_average<0.05, 0, 1)
+green_average <- mean(tile[[c(26, 27, 28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45)]])
+NDWI <- (green_average-NIR_average)/(green_average+NIR_average)
+hist(NDWI)
+water_mask <- ifel(NDWI>0.1, 0, 1)
+names(tile) <- 1:425
+library(randomForest)
+cloud_class <- terra::predict(object=tile, model=RF_model, na.rm=T)
+cloud_mask <- ifel(cloud_class=="cl", 0, 1)
+plot(cloud_mask)
+# build_area_mask <- rast("~/data/output/build_are_mask.tif")
+# temp_rast <- rast(ext(sent_aoi_stack_crop), resolution = res(tile))
+# build_area_mask_5res <- resample(build_area_mask, temp_rast, method="near")
+# building_mask <- crop(build_area_mask_5res, tile)
+mask <- mosaic(shade_mask, water_mask, cloud_mask, fun="min")
+plot(mask)
+mask <- ifel(mask==0, NA, 1) #is it necessary?
+writeRaster(mask, filename = paste("/scratch/mpijne/reflectance_data/strip_0708_aoi_mask", sep=""),filetype="ENVI", gdal="INTERLEAVE=BSQ", overwrite=T, datatype="INT1U")
+
+
+
+##############
+# doing from the fligth strip directly
+###############
+path <- "/home/mpijne/scratch/reflectance_data/ang20190802t220708_rfl"
+# ang20190802t220708_rfl
+strip_0708 <- st_read(boundaries[12])
+strip_0708_n <- st_zm(strip_0708[1], drop=T, what="ZM")
+strip_0708_df <- as.data.frame(strip_0708_n) 
+strip_0708_polygon <- as(strip_0708_n, "Spatial")
+st_write(strip_0708_n, "~/scratch/reflectance_data/boundary_strip_0708.shp")
+boundary_strip_0708 <- st_read("~/scratch/reflectance_data/boundary_strip_0708.shp")
+plot(boundary_strip_0708)
+bbox <- st_bbox(boundary_strip_0708)
+boundary_strip_0708_proj <- st_transform(boundary_strip_0708,32613)
+boundary_strip_0708_crop <- st_crop(boundary_strip_0708_proj, area_interest_proj)
+plot(boundary_strip_0708_proj)
+plot(area_interest_proj, add=T, col="orange")
+plot(boundary_strip_0708_crop, add=T, col="red")
+plot(boundary_strip_0708_crop)
+plot(boundary_strip_0708_proj, add=T, col="red")
+bbox <- st_bbox(ext(boundary_strip_0708_crop))
+plot(bbox)
+
+sf::gdal_utils("warp",
+  source = path, 
+  destination = paste(path, "rect",sep="_"),
+  options = c(
+  # outpufile = ENVI file
+  "-of", "ENVI",
+  "-t_srs", "epsg:32613",
+  # target extent (in target crs)
+  "-te",
+  bbox[1], # xmin
+  bbox[2], # ymin
+  bbox[3], # xmax
+  bbox[4] # ymax
+  )
+) 
+
+cell <- "ang20190802t220708_rfl_rect"
+tile <- rast(file.path("/scratch/mpijne/reflectance_data", cell))
+plot(ext(tile))
+plotRGB(tile, add=T, r=54, g=36, b=20, stretch="lin")
+plot(site_boundaries, add=T)
+abline(v=492000, col="red")
+abline(h=7677000, col="red")
+abline(v=510000, col="red")
+abline(h=7664000, col="red")
+RF_model <-readRDS("~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData")
+build_area_mask <- rast("~/data/output/build_are_mask.tif")
+sent_aoi_stack_crop <- rast("output/sent_crop_view.tif")
+
+NIR_average <- mean(tile[[c(86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105)]])
+hist(NIR_average, breaks=seq(terra::minmax(NIR_average)[1],terra::minmax(NIR_average)[2]+0.05, by=0.01))
+shade_mask <- ifel(NIR_average<0.05, 0, 1)
+plot(shade_mask)
+green_average <- mean(tile[[c(26, 27, 28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45)]])
+NDWI <- (green_average-NIR_average)/(green_average+NIR_average)
+hist(NDWI)
+water_mask <- ifel(NDWI>0.1, 0, 1)
+plot(water_mask)
+names(tile) <- 1:425
+library(randomForest)
+cloud_class <- terra::predict(object=tile, model=RF_model, na.rm=T)
+cloud_mask <- ifel(cloud_class=="cl", 0, 1)
+plot(cloud_mask)
+build_area_mask <- rast("~/data/output/build_are_mask.tif")
+temp_rast <- rast(ext(tile), resolution = res(tile))
+build_area_mask_5res <- resample(build_area_mask, temp_rast, method="near")
+building_mask <- crop(build_area_mask_5res, tile)
+mask <- mosaic(shade_mask, water_mask, cloud_mask, fun="min")
+plot(mask)
+mask <- ifel(mask==0, NA, 1) #is it necessary?
+# writeRaster(mask, filename = paste("/scratch/mpijne/reflectance_data/strip_0708_aoi_mask", sep=""),filetype="ENVI", gdal="INTERLEAVE=BSQ", overwrite=T, datatype="INT1U")
+mask <- rast("/scratch/mpijne/reflectance_data/strip_0708_aoi_mask")
+
+
+# crop smaller area
+smaller_ext <- ext(492000, 510000, 7664000, 7677000)
+plot(smaller_ext)
+tile_crop <- crop(tile, smaller_ext)
+plotRGB(tile_crop, r=54, g=36, b=20, stretch="lin")
+mask_crop <- crop(mask, smaller_ext)
+plot(mask_crop)
+writeRaster(tile_crop, filetype="ENVI", gdal="INTERLEAVE=BIL", overwrite=T, filename = "~/scratch/reflectance_data/strip_0708_smaller_ext.envi")
+writeRaster(mask_crop, filetype="ENVI", gdal="INTERLEAVE=BSQ", overwrite=T, datatype="INT1U", filename = "~/scratch/reflectance_data/strip_0708_mask_smaller_ext")
 
 ###############
 # Code from Jakob
