@@ -1429,9 +1429,6 @@ mean_slope_plot_trans <- ggplot(data = Slope_df,
   geom_vline(xintercept = as.numeric(1), linetype='longdash', col="red", alpha=0.5)+
   theme_bw()
   
-# +
-#   scale_y_discrete(labels = c("Intercept", "Body Weight", "Brain Weight"))
-
 
 #################
 # Model with coefficient of variation
@@ -1440,7 +1437,7 @@ Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_
 Shannon_matrix <- as.matrix(Shannon, wide=T)
 Elev <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 10, "_res.tif", sep=""))
 Elev_matrix <- as.matrix(Elev, wide=T)
-Mean_ele <- Elev <- rast(paste("~/data/ArcDEM/mean_ele_masked_", 10, "_res.tif", sep=""))
+Mean_ele <- rast(paste("~/data/ArcDEM/mean_ele_masked_", 10, "_res.tif", sep=""))
 Mean_ele_matrix <- as.matrix(Mean_ele, wide=T)
 nrow= nrow(Shannon_matrix)
 ncol= ncol(Shannon_matrix)
@@ -1457,7 +1454,7 @@ node = 1:n
 data <- data.frame(Shannon_index = s, topo=e, mean_ele = me, node=node)
 data <- data[-c(which(is.na(s))),]
 data$coeff_var <- data$topo/data$mean_ele
-data <- data[-11798,] 
+# data <- data[-11798,] 
 plot(data$Shannon_index~data$coeff_var)
 
 formula= Shannon_index ~ 1 + coeff_var +
@@ -1468,18 +1465,21 @@ Gamma_shannon_coeffvar_res_100 <- inla(formula,
                                      control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
 
 summary(Gamma_shannon_coeffvar_res_100)
-save(Gamma_shannon_coeffvar_res_100, file="~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_100.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_100.Rdata"))
+save(Gamma_shannon_coeffvar_res_100, file="~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_100.Rdata")
+get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_100.Rdata"))
 
 
-formula= Shannon_index ~ 1 + mean_ele +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_mean_ele_res_100 <- inla(formula,     
-                                       family = "gamma",
-                                       data = data,
-                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-save(Gamma_shannon_mean_ele_res_100, file="~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_100.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_100.Rdata"))
+coeff_var_glm_100 <- glm(Shannon_index ~ coeff_var, family = Gamma(link = "identity"), data = data)
+
+
+# formula= Shannon_index ~ 1 + mean_ele +
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# Gamma_shannon_mean_ele_res_100 <- inla(formula,     
+#                                        family = "gamma",
+#                                        data = data,
+#                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+# save(Gamma_shannon_mean_ele_res_100, file="~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_100.Rdata")
+# get(load("~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_100.Rdata"))
 
 
 
@@ -1514,18 +1514,18 @@ Gamma_shannon_coeffvar_res_200 <- inla(formula,
                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
 
 summary(Gamma_shannon_coeffvar_res_200)
-save(Gamma_shannon_coeffvar_res_200, file="~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_200.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_200.Rdata"))
+save(Gamma_shannon_coeffvar_res_200, file="~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_200.Rdata")
+get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_200.Rdata"))
 
-
-formula= Shannon_index ~ 1 + mean_ele +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_mean_ele_res_200 <- inla(formula,     
-                                       family = "gamma",
-                                       data = data,
-                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-save(Gamma_shannon_mean_ele_res_200, file="~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_200.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_200.Rdata"))
+# 
+# formula= Shannon_index ~ 1 + mean_ele +
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# Gamma_shannon_mean_ele_res_200 <- inla(formula,     
+#                                        family = "gamma",
+#                                        data = data,
+#                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+# save(Gamma_shannon_mean_ele_res_200, file="~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_200.Rdata")
+# get(load("~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_200.Rdata"))
 
 
 # 300
@@ -1559,18 +1559,18 @@ Gamma_shannon_coeffvar_res_300 <- inla(formula,
                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
 
 summary(Gamma_shannon_coeffvar_res_300)
-save(Gamma_shannon_coeffvar_res_300, file="~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_300.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_300.Rdata"))
+save(Gamma_shannon_coeffvar_res_300, file="~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_300.Rdata")
+get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_300.Rdata"))
 
-
-formula= Shannon_index ~ 1 + mean_ele +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_mean_ele_res_300 <- inla(formula,     
-                                       family = "gamma",
-                                       data = data,
-                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-save(Gamma_shannon_mean_ele_res_300, file="~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_300.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_300.Rdata"))
+# 
+# formula= Shannon_index ~ 1 + mean_ele +
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# Gamma_shannon_mean_ele_res_300 <- inla(formula,     
+#                                        family = "gamma",
+#                                        data = data,
+#                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+# save(Gamma_shannon_mean_ele_res_300, file="~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_300.Rdata")
+# get(load("~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_300.Rdata"))
 
 
 # 500
@@ -1604,18 +1604,18 @@ Gamma_shannon_coeffvar_res_500 <- inla(formula,
                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
 
 summary(Gamma_shannon_coeffvar_res_500)
-save(Gamma_shannon_coeffvar_res_500, file="~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_500.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_500.Rdata"))
+save(Gamma_shannon_coeffvar_res_500, file="~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_500.Rdata")
+get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_500.Rdata"))
 
 
-formula= Shannon_index ~ 1 + mean_ele +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_mean_ele_res_500 <- inla(formula,     
-                                       family = "gamma",
-                                       data = data,
-                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-save(Gamma_shannon_mean_ele_res_500, file="~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_500.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_500.Rdata"))
+# formula= Shannon_index ~ 1 + mean_ele +
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# Gamma_shannon_mean_ele_res_500 <- inla(formula,     
+#                                        family = "gamma",
+#                                        data = data,
+#                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+# save(Gamma_shannon_mean_ele_res_500, file="~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_500.Rdata")
+# get(load("~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_500.Rdata"))
 
 
 # 1000
@@ -1649,17 +1649,46 @@ Gamma_shannon_coeffvar_res_1000 <- inla(formula,
                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
 
 summary(Gamma_shannon_coeffvar_res_1000)
-save(Gamma_shannon_coeffvar_res_1000, file="~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_1000.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_1000.Rdata"))
+save(Gamma_shannon_coeffvar_res_1000, file="~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_1000.Rdata")
+get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_1000.Rdata"))
 
-formula= Shannon_index ~ 1 + mean_ele +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_mean_ele_res_1000 <- inla(formula,     
-                                       family = "gamma",
-                                       data = data,
-                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-save(Gamma_shannon_mean_ele_res_1000, file="~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_1000.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_1000.Rdata"))
+# formula= Shannon_index ~ 1 + mean_ele +
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# Gamma_shannon_mean_ele_res_1000 <- inla(formula,     
+#                                        family = "gamma",
+#                                        data = data,
+#                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+# save(Gamma_shannon_mean_ele_res_1000, file="~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_1000.Rdata")
+# get(load("~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_1000.Rdata"))
+
+# plotting CV results
+
+CV_df <- rbind(Gamma_shannon_coeffvar_res_100$summary.fixed[2,c(1,3,5)],
+               Gamma_shannon_coeffvar_res_200$summary.fixed[2,c(1,3,5)],
+               Gamma_shannon_coeffvar_res_300$summary.fixed[2,c(1,3,5)],
+               Gamma_shannon_coeffvar_res_500$summary.fixed[2,c(1,3,5)],
+               Gamma_shannon_coeffvar_res_1000$summary.fixed[2,c(1,3,5)])
+est <- c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution")
+CV_df <- cbind(as.factor(est), CV_df)
+colnames(CV_df)[c(1,3:4)] <- c("resolution","lower", "upper")
+# Slope_df[,2:4] <- exp(Slope_df[,2:4])
+CV_df$resolution <- factor(CV_df$resolution, levels = c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution"))
+
+CV_coeff_plot <- ggplot(data = CV_df, 
+                                aes(x = mean, y = resolution, xmin = lower, xmax = upper)) +
+  geom_pointrange(fatten=2.5) +
+  labs(
+    # title = "Model Estimates of the coefficient of variation in elevation on Shannon index estimates",
+       x = "Coefficient Estimate",
+       y = "resolution"
+       # ,caption = "Models fit with INLA using a log-link function. Error bars show the 95% confidence interval."
+       )+
+  geom_vline(xintercept = as.numeric(0), linetype='longdash', col="red", alpha=0.5)+
+  coord_cartesian(xlim = c(-0.01, 0.01))+
+  theme_bw() + 
+  theme(panel.border = element_blank(), panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
+CV_coeff_plot
 
 
 #######
@@ -1695,6 +1724,8 @@ Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_
 Shannon_matrix <- as.matrix(Shannon, wide=T)
 Slope <- rast("~/data/ArcDEM/sd_slope_masked_10_res.tif")
 Slope_matrix <- as.matrix(Slope, wide=T)
+mean_slope <- rast("~/data/ArcDEM/mean_slope_masked_10_res.tif")
+mean_slope_matrix <- as.matrix(mean_slope)
 nrow= nrow(Shannon_matrix)
 ncol= ncol(Shannon_matrix)
 n = nrow*ncol
@@ -1702,11 +1733,14 @@ s = inla.matrix2vector(Shannon_matrix)
 table(is.na(s))
 s[!is.na(s)] <- s[!is.na(s)]+ 1
 sl <- inla.matrix2vector(Slope_matrix)
+msl <- inla.matrix2vector(mean_slope_matrix)
 table(is.na(Slope_matrix))
 table(is.na(Shannon_matrix))
+table(is.na(mean_slope_matrix))
 node = 1:n
-data <- data.frame(Shannon_index = s, slope = sl, node=node)
+data <- data.frame(Shannon_index = s, slope = sl, mean_sl = msl, node=node)
 data <- data[-c(which(is.na(s))),]
+data$slope_CV <- data$slope/data$mean_sl
 
 formula= Shannon_index ~ 1 + slope +
   f(node, model="matern2d", nrow=nrow, ncol=ncol)
@@ -1716,7 +1750,7 @@ Gamma_shannon_sd_slope_res_100 <- inla(formula,
                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
 summary(Gamma_shannon_sd_slope_res_100)
 save(Gamma_shannon_sd_slope_res_100, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_100.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_100.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_100.Rdata"))
 
 # glm plotting
 res_100_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
@@ -1743,6 +1777,16 @@ res_100_plot_pred <- res_100_plot +
   geom_line(data = res_100_pred_df, 
             colour = "blue")
 res_100_plot_pred
+
+# with coeff variation
+formula= Shannon_index ~ 1 + slope_CV +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_slopeCV_res_100 <- inla(formula,     
+                                       family = "gamma",
+                                       data = data,
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_slopeCV_res_100)
+
 
 
 # 200m
@@ -1771,7 +1815,7 @@ Gamma_shannon_sd_slope_res_200 <- inla(formula,
                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
 summary(Gamma_shannon_sd_slope_res_200)
 save(Gamma_shannon_sd_slope_res_200, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_200.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_200.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_200.Rdata"))
 
 # glm plotting
 res_200_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
@@ -1827,7 +1871,7 @@ Gamma_shannon_sd_slope_res_300 <- inla(formula,
                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
 summary(Gamma_shannon_sd_slope_res_300)
 save(Gamma_shannon_sd_slope_res_300, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_300.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_300.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_300.Rdata"))
 
 
 # glm plotting
@@ -1882,7 +1926,7 @@ Gamma_shannon_sd_slope_res_500 <- inla(formula,
                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
 summary(Gamma_shannon_sd_slope_res_500)
 save(Gamma_shannon_sd_slope_res_500, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_500.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_500.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_500.Rdata"))
 
 
 # glm plotting
@@ -1937,7 +1981,7 @@ Gamma_shannon_sd_slope_res_1000 <- inla(formula,
                                      control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
 summary(Gamma_shannon_sd_slope_res_1000)
 save(Gamma_shannon_sd_slope_res_1000, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_1000.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_1000.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_1000.Rdata"))
 
 # glm plotting
 res_1000_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
@@ -1975,7 +2019,7 @@ Sd_slope_df <- rbind(Gamma_shannon_sd_slope_res_100$summary.fixed[2,c(1,3,5)],
 est <- c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution")
 Sd_slope_df <- cbind(as.factor(est), Sd_slope_df)
 colnames(Sd_slope_df)[c(1,3:4)] <- c("resolution","lower", "upper")
-Sd_slope_df[2:4] <- exp(Sd_slope_df[2:4])
+# Sd_slope_df[2:4] <- exp(Sd_slope_df[2:4])
 Sd_slope_df$resolution <- factor(Sd_slope_df$resolution, levels = c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution"))
 sd_slope_plot_trans <- ggplot(data = Sd_slope_df, 
        aes(x = mean, y = resolution, xmin = lower, xmax = upper)) +
@@ -1986,8 +2030,20 @@ sd_slope_plot_trans <- ggplot(data = Sd_slope_df,
        caption = "Models fit with INLA. Error bars show the 95% confidence interval.")+
   geom_vline(xintercept = as.numeric(1), col="red", alpha=0.5, lty="dashed")+
   theme_bw()
-# +
-#   scale_y_discrete(labels = c("Intercept", "Body Weight", "Brain Weight"))
+
+sd_slope_plot <- ggplot(data = Sd_slope_df, 
+                              aes(x = mean, y = resolution, xmin = lower, xmax = upper)) +
+  geom_pointrange() +
+  labs(
+    # title = expression(paste("Model estimate of ", sigma, "(slope) on the estimate Shannon index")),
+       x = "Coefficient Estimate",
+       y = "Resolution",
+       caption = "Models fit with INLA using a log-link function. Error bars show the 95% confidence interval.")+
+  geom_vline(xintercept = as.numeric(0), col="red", alpha=0.5, lty="dashed")+
+  theme_bw() + 
+  theme(panel.border = element_blank(), panel.grid.major.y = element_blank(),
+                     panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
+sd_slope_plot
 
 
 plot_grid(sd_topo_plot_trans, sd_slope_plot_trans)
@@ -2302,6 +2358,93 @@ get(load("~/data/output/INLA_modelling/Gamma_shannon_dist_res_100.Rdata"))
 
 
 
+
+
+
+
+
+
+############
+# Plot in the thesis results 
+###########
+get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_100.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_200.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_300.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_500.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_1000.Rdata"))
+
+
+Sd_slope_df <- rbind(Gamma_shannon_sd_slope_res_100$summary.fixed[2,c(1,3,5)],
+                     Gamma_shannon_sd_slope_res_200$summary.fixed[2,c(1,3,5)],
+                     Gamma_shannon_sd_slope_res_300$summary.fixed[2,c(1,3,5)],
+                     Gamma_shannon_sd_slope_res_500$summary.fixed[2,c(1,3,5)],
+                     Gamma_shannon_sd_slope_res_1000$summary.fixed[2,c(1,3,5)])
+est <- c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution")
+Sd_slope_df <- cbind(as.factor(est), Sd_slope_df)
+colnames(Sd_slope_df)[c(1,3:4)] <- c("resolution","lower", "upper")
+# Sd_slope_df[2:4] <- exp(Sd_slope_df[2:4])
+Sd_slope_df$resolution <- factor(Sd_slope_df$resolution, levels = c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution"))
+sd_slope_plot <- ggplot(data = Sd_slope_df, 
+                        aes(x = mean, y = resolution, xmin = lower, xmax = upper)) +
+  geom_pointrange(fatten=2.5) +
+  labs(
+    # title = expression(paste("Model estimate of ", sigma, "(slope) on the estimate Shannon index")),
+    x = "",
+    y = ""
+    # ,caption = "Models fit with INLA using a log-link function. Error bars show the 95% confidence interval."
+    )+
+  geom_vline(xintercept = as.numeric(0), col="red", alpha=0.5, lty="dashed")+
+  theme_bw() + 
+  theme(panel.border = element_blank(), panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), axis.text.y = element_text(size=12), axis.text.x = element_text(size=12)
+        # ,panel.grid.major.x = element_blank()
+        )
+sd_slope_plot
+
+
+get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_100.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_200.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_300.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_500.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_1000.Rdata"))
+
+CV_df <- rbind(Gamma_shannon_coeffvar_res_100$summary.fixed[2,c(1,3,5)],
+               Gamma_shannon_coeffvar_res_200$summary.fixed[2,c(1,3,5)],
+               Gamma_shannon_coeffvar_res_300$summary.fixed[2,c(1,3,5)],
+               Gamma_shannon_coeffvar_res_500$summary.fixed[2,c(1,3,5)],
+               Gamma_shannon_coeffvar_res_1000$summary.fixed[2,c(1,3,5)])
+est <- c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution")
+CV_df <- cbind(as.factor(est), CV_df)
+colnames(CV_df)[c(1,3:4)] <- c("resolution","lower", "upper")
+# Slope_df[,2:4] <- exp(Slope_df[,2:4])
+CV_df$resolution <- factor(CV_df$resolution, levels = c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution"))
+
+CV_coeff_plot <- ggplot(data = CV_df, 
+                        aes(x = mean, y = resolution, xmin = lower, xmax = upper)) +
+  geom_pointrange(fatten=2.5) +
+  labs(
+    # title = "Model Estimates of the coefficient of variation in elevation on Shannon index estimates",
+    x = ""
+    ,y = ""
+    # ,caption = "Models fit with INLA using a log-link function. Error bars show the 95% confidence interval."
+  )+
+  geom_vline(xintercept = as.numeric(0), linetype='longdash', col="red", alpha=0.5)+
+  coord_cartesian(xlim = c(-0.025, 0.025))+
+  theme_bw() + 
+  theme(panel.border = element_blank(), panel.grid.major.y = element_blank(), axis.text.y = element_blank(),
+        panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), axis.text.x = element_text(size=12) 
+        # ,panel.grid.major.x = element_blank()
+        )
+CV_coeff_plot
+
+library(grid)
+library(gridExtra)
+plotgrid_sd_slope_CV_ele <- plot_grid(sd_slope_plot, CV_coeff_plot, ncol=2, rel_widths = c(1.25,1))
+x.grob <- textGrob("Coefficient Estimates", gp=gpar(fontsize=14))
+y.grob <- textGrob("Resolution", rot=90, gp=gpar(fontsize=14)) 
+final_plot <- grid.arrange(arrangeGrob(plotgrid_sd_slope_CV_ele,bottom = x.grob, left = y.grob))
+save_plot(filename="~/data/output/final_plot/plot_grid_sd_slope_CV_ele.png", final_plot, ncol=2)
+save_plot(filename="~/data/output/final_plot/plot_grid_sd_slope_CV_ele_with_vgrid.png", final_plot, ncol=2)
 
 
 
