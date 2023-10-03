@@ -1,4 +1,4 @@
-setwd("C:/Users/Marie/OneDrive/Documents/master/master thesis/master-thesis")
+setwd("~/data")
 library(sf)
 library(tidyverse)
 library(dplyr)
@@ -67,7 +67,6 @@ plot(NDSI)
 ################################
 # Sentinel2 data from 27th of July 2019
 ################################
-############################
 
 #Mosaic 2 tiles together:
 path <- c("C:/Users/Marie/OneDrive/Documents/master/master thesis/master-thesis/data 2019/S2B_MSIL1C_20190727T185929_N0208_R013_T13WDS_20190727T210028.SAFE", "C:/Users/Marie/OneDrive/Documents/master/master thesis/master-thesis/data 2019/S2B_MSIL2A_20190727T185929_N0213_R013_T13WES_20190727T214238.SAFE/GRANULE/L2A_T13WES_A012480_20190727T190134/IMG_DATA/R10m")
@@ -96,6 +95,36 @@ lines(area_interest_proj, col="red")
 sent_stack <- rast(sent_tot)
 plotRGB(sent_stack, r=3, g=2, b=1 ,scale=10000, stretch="lin")
 lines(area_interest_proj, col="red")
+
+
+###########
+# maps overview of the world
+###########
+library(maptools)
+library(sp)
+library(rgdal)
+require(maps)
+library(ggplot2)
+library(cowplot)
+
+lim = data.frame(ylim=c(25, 75), xlim=c(-150, -70))
+bbox_us_ca <- st_bbox(c(
+  xmin=lim$xlim[1],
+  xmax=lim$xlim[2],
+  ymin=lim$ylim[1],
+  ymax=lim$ylim[2]))
+
+area_interest_point <- data.frame(x=(st_bbox(area_interest)[1]+st_bbox(area_interest)[3])/2, y=(st_bbox(area_interest)[2]+st_bbox(area_interest)[4])/2)
+
+map_us_ca <- ggplot()+
+  borders("world", fill="grey90",colour="grey")+
+  # coord_fixed(ylim=lim$ylim, xlim=lim$xlim)+
+  coord_map(projection = "mercator", xlim=lim$xlim, ylim=lim$ylim, orientation = c(90, 0, 0))+
+  geom_point(data=area_interest_point, aes(x,y, shape=15))+
+  scale_shape_identity()+
+  theme_map()
+map_us_ca
+save_plot(map_us_ca, filename = "~/data/output/final_plot/overview_us_ca_map.png", base_height = 3, bg="white")
 
 
 
