@@ -241,49 +241,52 @@ sd_ele_100 <- rast("~/data/ArcDEM/ArcDEM_masked_10_res.tif")
 sd_ele_100_raster <- raster(sd_ele_100)
 sd_ele_100_sp <- as(sd_ele_100_raster, "SpatialPointsDataFrame")
 
-vario_ele <- variogram(X29_21_1_1_2m_v4.1_dem~1, data=sd_ele_100_sp, cutoff=30000, width=500)
-plot(vario_ele)
-
-vario_ele_close <- variogram(X29_21_1_1_2m_v4.1_dem~1, data=sd_ele_100_sp, cutoff=7000, width=100)
-plot(vario_ele_close)
-
-vario_ele_far <- variogram(X29_21_1_1_2m_v4.1_dem~1, data=sd_ele_100_sp, cutoff=30000, width=1000)
-plot(vario_ele_far)
-
-vario_log_ele <- variogram(log(X29_21_1_1_2m_v4.1_dem)~1, data=sd_ele_100_sp)
-plot(vario_log_ele)
+# vario_ele <- variogram(X29_21_1_1_2m_v4.1_dem~1, data=sd_ele_100_sp, cutoff=30000, width=500)
+# plot(vario_ele)
+# 
+# vario_ele_close <- variogram(X29_21_1_1_2m_v4.1_dem~1, data=sd_ele_100_sp, cutoff=7000, width=100)
+# plot(vario_ele_close)
+# 
+# vario_ele_far <- variogram(X29_21_1_1_2m_v4.1_dem~1, data=sd_ele_100_sp, cutoff=30000, width=1000)
+# plot(vario_ele_far)
+# 
+# vario_log_ele <- variogram(log(X29_21_1_1_2m_v4.1_dem)~1, data=sd_ele_100_sp)
+# plot(vario_log_ele)
 
 vario_log_ele_close <- variogram(log(X29_21_1_1_2m_v4.1_dem)~1, data=sd_ele_100_sp, cutoff=5000, width=100)
 plot(vario_log_ele_close)
+# vario_log_ele_far <- variogram(log(X29_21_1_1_2m_v4.1_dem)~1, data=sd_ele_100_sp, cutoff=30000, width=1000)
+# plot(vario_log_ele_far)
 
-vario_log_ele_far <- variogram(log(X29_21_1_1_2m_v4.1_dem)~1, data=sd_ele_100_sp, cutoff=30000, width=1000)
-plot(vario_log_ele_far)
-
-try <- vgm(0.05, "Exp", 4000, nugget=0.12)
-try <- vgm(0.05, "Mat", 4000, nugget=0.12)
+# try <- vgm(0.01, "Exp", 3000, nugget=0.1)
+try <- vgm(0.1, "Exp", 1000, nugget=0.12)
 plot(try, cutoff=5000)
 vario_fit_close <- fit.variogram(vario_log_ele_close, try, fit.kappa = TRUE)
 plot(vario_log_ele_close, vario_fit_close, xlab="distance [m]")
 vario_fit_close
 plot(vario_log_ele_close)
-plot(vario_fit_close, cutoff=000)
-
-vario_fit_ele <- fit.variogram(vario_log_ele, vgm(0.1, "Exp", 3000, nugget=0.1), fit.kappa = TRUE)
-plot(vario_fit_ele, cutoff=10000)
-vario_fit_far <- fit.variogram(vario_log_ele_far, vgm(0.05, "Mat", 4000, nugget=0.12), fit.kappa = TRUE)
-plot(vario_fit_far, cutoff=5000)
-plot(vario_far, vario_fit_far)
-
-
 plot(vario_fit_close, cutoff=5000)
-plot(vario_close, vario_fit_close)
+plot(vario_log_ele_close, vario_fit_close)
 
+# vario_fit_ele <- fit.variogram(vario_log_ele, vgm(0.1, "Exp", 3000, nugget=0.1), fit.kappa = TRUE)
+# plot(vario_fit_ele, cutoff=10000)
+# vario_fit_far <- fit.variogram(vario_log_ele_far, vgm(0.05, "Mat", 4000, nugget=0.12), fit.kappa = TRUE)
+# plot(vario_fit_far, cutoff=5000)
+# plot(vario_far, vario_fit_far)
+preds = variogramLine(vario_fit_close, maxdist = 5000)
+semivar_ele <- ggplot()+
+  geom_point(data=vario_log_ele_close, aes(x=dist, y=gamma), pch=21, cex=2,  col="dodgerblue1")+
+  geom_line(data=preds, aes(x=dist, y=gamma), col="dodgerblue1")+
+  labs(y=expression(paste("semi-variance of ", sigma, ("elevation"))), x=("distance [m]"))+
+  theme_classic()+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), text=element_text(size=14))+
+  coord_cartesian(xlim =c(250, 5000), ylim = c(0, 0.7))
 
 # sd slope
 sd_slope_100 <- rast("~/data/ArcDEM/sd_slope_masked_10_res.tif")
 sd_slope_100_raster <- raster(sd_slope_100)
 sd_slope_100_sp <- as(sd_slope_100_raster, "SpatialPointsDataFrame")
-vario_slope_close <- variogram(log(slope)~1, data=sd_slope_100_sp, cutoff=7000, width=100)
+vario_slope_close <- variogram(log(slope)~1, data=sd_slope_100_sp, cutoff=5000, width=100)
 plot(vario_slope_close)
 try <- vgm(0.1, "Exp", 1000, nugget=0.12)
 # try <- vgm(0.05, "Mat", 4000, nugget=0.12)
@@ -291,6 +294,15 @@ plot(try, cutoff=5000)
 vario_fit_slope_close <- fit.variogram(vario_slope_close, try, fit.kappa = TRUE)
 plot(vario_slope_close, vario_fit_slope_close, xlab="distance [m]")
 vario_fit_slope_close
+
+preds = variogramLine(vario_fit_slope_close, maxdist = 5000)
+semivar_slope <- ggplot()+
+  geom_point(data=vario_slope_close, aes(x=dist, y=gamma), pch=21, cex=2,  col="dodgerblue1")+
+  geom_line(data=preds, aes(x=dist, y=gamma), col="dodgerblue1")+
+  labs(y=expression(paste("semi-variance of ", sigma, ("slope"))), x=("distance [m]"))+
+  theme_classic()+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), text=element_text(size=14))+
+  coord_cartesian(xlim =c(250, 5000), ylim = c(0, 0.4))
 
 
 ##################
@@ -309,17 +321,17 @@ fact <- window_size*10/2
 for(x in 1:length(fact)){
   # browser()
   Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", window_size[x], "PC1278", sep="_"))
-  temp_rast <- rast(ext(Shannon), resolution = 10)
+  temp_rast <- rast(ext(Shannon), resolution = 2)
   tile_DEM_crop_resample <- resample(tile_DEM_crop, temp_rast, method = "bilinear")
   slope <- terrain(tile_DEM_crop_resample, v="slope", neighbors=4, unit="degrees")
   # aspect <- terrain(tile_DEM_crop_resample, v="aspect", neighbors=4, unit="degrees")
   slope_noNA <- subst(slope, NA, 0) #have to adjust
   # aspect_noNA <- subst(aspect, NA, 0)
-  slope_aggregated <- aggregate(slope_noNA, fact=window_size[x], fun="sd")
-  # aspect_aggregated <- aggregate(aspect_noNA, fact=fact[x], fun="mean")
+  # slope_aggregated <- aggregate(slope_noNA, fact=window_size[x], fun="sd")
+  slope_aggregated <- aggregate(slope_noNA, fact=window_size[x], fun="mean")
   slope_mask <- mask(slope_aggregated, Shannon)
   # aspect_mask <- mask(aspect_aggregated, Shannon)
-  writeRaster(slope_mask, filename = paste("~/data/ArcDEM/sd_slope_agg10_masked_", window_size[x], "_res.tif", sep=""))
+  writeRaster(slope_mask, filename = paste("~/data/ArcDEM/mean_slope_masked_", window_size[x], "_res.tif", sep=""))
   # writeRaster(aspect_mask, filename = paste("~/data/ArcDEM/mean_aspect_masked_", window_size[x], "_res.tif", sep=""))
   # Arc_DEM_poly <- as.polygons(tile_DEM_masked, round=F, aggregate=F, extent=F, na.rm=F)
   # Sentinel_shannon_poly <- as.polygons(Shannon, round=F, aggregate=F, extent=F,na.rm=F)
