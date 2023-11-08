@@ -16,8 +16,9 @@ library(cowplot)
 library(tools)
 library(patchwork)
 ################################################################################
-# sent <- rast("~/data/biodivmapR_sent/sent_crop_envi")
-# writeRaster(sent, filename = "~/data/biodivmapR_sent/sent_crop_envi_BIL", filetype="ENVI", gdal=c("INTERLEAVE=BIL"), overwrite=T)
+# save the data in the proper format
+sent <- rast("~/data/biodivmapR_sent/sent_crop_envi")
+writeRaster(sent, filename = "~/data/biodivmapR_sent/sent_crop_envi_BIL", filetype="ENVI", gdal=c("INTERLEAVE=BIL"), overwrite=T)
 
 ################################################################################
 
@@ -32,7 +33,7 @@ ext(mask_aviris)
 plot(mask_whole)
 ext(mask_whole)
 temp_rast <- rast(ext(mask_whole), resolution=10)
-mask_aviris_10 <- resample(mask_aviris, temp_rast)
+mask_aviris_10 <- resample(mask_aviris, temp_rast, method="near")
 ext(mask_aviris_10)
 plot(mask_whole)
 plot(mask_aviris_10, add=T)
@@ -50,19 +51,17 @@ NameRaster <- "sent_crop_envi_BIL"
 # Define path for image file to be processed
 Input_Image_File <- file.path(Datadir,NameRaster)
 # Define path for corresponding mask file
+# => uncomment the right mask depending on the analysis
 # NameMask <- "mask_sent2_final_NA"
-NameMask <- "mask_matchin_aviris"
+# NameMask <- "mask_matchin_aviris"
 Input_Mask_File <- file.path(Datadir, NameMask)
 # Input_Mask_File <- F
 # Define path for master output directory where files produced during the process are saved
-Output_Dir <- '~/data/biodivmapR_sent/RESULTS_cluster_50'
-Output_Dir <- '~/data/biodivmapR_sent/RESULTS_cluster_20'
-Output_Dir <- "~/data/biodivmapR_sent/RESULTS_PC_selection"
-Output_Dir <- "~/data/biodivmapR_sent/RESULTS_aviris_extend"
+# => un-comment the right directory
+# Output_Dir <- '~/data/biodivmapR_sent/RESULTS_cluster_20'
+# Output_Dir <- "~/data/biodivmapR_sent/RESULTS_PC_selection"
+# Output_Dir <- "~/data/biodivmapR_sent/RESULTS_aviris_extend"
 # dir.create(path = Output_Dir,recursive = T,showWarnings = F)
-# NDVI_Thresh <- 0.8
-# Blue_Thresh <- 500
-# NIR_Thresh <- 1500
 # Apply normalization with continuum removal?
 Continuum_Removal <- F
 # Type of dimensionality reduction
@@ -74,30 +73,18 @@ FilterPCA <- F
 # window size forcomputation of spectral diversity
 window_size <-10
 # # computational parameters
-nbCPU <- 2
-MaxRAM <- 6
+nbCPU <- 6
+MaxRAM <- 4
 # number of clusters (spectral species)
 nbclusters <- 50
 nbclusters <- 20
 
 ################################################################################
-##                      Perform radiometric filtering                         ##
-## https://jbferet.github.io/biodivMapR/articles/biodivMapR_3.html            ##
-################################################################################
-# print("PERFORM RADIOMETRIC FILTERING")
-# Input_Mask_File <- perform_radiometric_filtering(Image_Path = Input_Image_File,
-#                                                  Mask_Path = Input_Mask_File,
-#                                                  Output_Dir = Output_Dir,
-#                                                  TypePCA = TypePCA,
-#                                                  NDVI_Thresh = NDVI_Thresh,
-#                                                  Blue_Thresh = Blue_Thresh,
-#                                                  NIR_Thresh = NIR_Thresh)
-################################################################################
 ##                  Perform PCA & Dimensionality reduction                    ##
 ## https://jbferet.github.io/biodivMapR/articles/biodivMapR_4.html            ##
 ################################################################################
 print("PERFORM DIMENSIONALITY REDUCTION")
-PCA_Output <- perform_PCA(Input_Image_File = Input_Image_File,
+PCA_Output <- perform_PCA_ML(Input_Image_File = Input_Image_File,
                           Input_Mask_File = Input_Mask_File,
                           Output_Dir = Output_Dir,
                           TypePCA = TypePCA,
@@ -115,48 +102,10 @@ PCA_Output <- get(load("~/data/biodivmapR_sent/RESULTS_aviris_extend/sent_crop_e
 # path for the updated mask
 Input_Mask_File <- PCA_Output$MaskPath
 
-# way of visualizing PC variance explained
-var_exp <- (PCA_Output$PCA_model$sdev^2/sum(PCA_Output$PCA_model$sdev^2))*100
-barplot(var_exp, names.arg = colnames(PCA_Output$PCA_model$x))
-cumsum(var_exp)
+# visualizing PC variance explained
 screeplot(PCA_Output$PCA_model)
-# visual assesment of PCs
-viridis_colors <- viridis::inferno(60)
-PCs <- rast("biodivmapR_sent/RESULTS/sent_crop_envi/SPCA/PCA/OutputPCA_10_PCs")
-PCs <- rast("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi/SPCA/PCA/OutputPCA_10_PCs")
-plot(PCs, col=viridis_colors, legend=F)
 
-viridis_colors <- viridis::plasma(20)
-na_col <- grey(0.8, alpha=0.5)
-
-pdf(file = "~/data/output/PCs_sentinel.pdf") 
-for (x in 1:nlyr(PCs)) {
-    print(ggplot() +
-        geom_spatraster(data = PCs[[3]], na.rm = TRUE, aes(fill="PC 1"))+
-        theme_minimal()+
-        scale_fill_gradientn(colours = viridis_colors, na.value = na_col))
-}
-dev.off()
-
-pdf(file = "~/data/output/PCs_sentinel.pdf") 
-m <- ggplot() +
-  geom_spatraster(data = PCs, na.rm = TRUE, aes(fill=`PC 10`))+
-  # theme_map()+
-  theme_minimal()+
-  scale_fill_gradientn(colours = viridis_colors, na.value = na_col) 
-  # labs(fill = substitute(italic("H'")))
-m  
-dev.off()
-
-# Select components from the PCA/SPCA/MNF raster
-# Sel_PC = path of the file where selected components are stored
-Sel_PC <- select_PCA_components(Input_Image_File = Input_Image_File,
-                                Output_Dir = Output_Dir,
-                                PCA_Files = PCA_Output$PCA_Files,
-                                TypePCA = PCA_Output$TypePCA,
-                                File_Open = TRUE)
-
-
+# Select PC based on visual assessment in ArcGIS software
 SelectedPCs = c(1,2,7,8)
 
 ################################################################################
@@ -165,21 +114,21 @@ SelectedPCs = c(1,2,7,8)
 ################################################################################
 print("MAP SPECTRAL SPECIES")
 future.seed=TRUE
-Kmeans_info <- map_spectral_species(Input_Image_File = Input_Image_File,
-                                    Input_Mask_File = PCA_Output$MaskPath,
-                                    Output_Dir = Output_Dir,
-                                    SpectralSpace_Output = PCA_Output,
-                                    nbclusters = nbclusters,
-                                    nbCPU = nbCPU, MaxRAM = MaxRAM,
-                                    SelectedPCs = SelectedPCs)
-# save(Kmeans_info, file="~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info_PC12.Rdata")
-Kmeans_info <- get(load("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info.Rdata"))
+# Kmeans_info <- map_spectral_species(Input_Image_File = Input_Image_File,
+#                                     Input_Mask_File = PCA_Output$MaskPath,
+#                                     Output_Dir = Output_Dir,
+#                                     SpectralSpace_Output = PCA_Output,
+#                                     nbclusters = nbclusters,
+#                                     nbCPU = nbCPU, MaxRAM = MaxRAM,
+#                                     SelectedPCs = SelectedPCs)
+# # save(Kmeans_info, file="~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info_PC12.Rdata")
+# Kmeans_info <- get(load("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info.Rdata"))
 
 
 # To have the name of the PCs selected to map the spectral species in the filename 
 # run the function saved in the document map_spectral_sp_PC_naming.R to have in the 
 # global environment
-
+future.seed=TRUE
 Kmeans_info <- map_spectral_species_ML(Input_Image_File = Input_Image_File,
                                     Input_Mask_File = PCA_Output$MaskPath,
                                     Output_Dir = Output_Dir,
@@ -191,11 +140,13 @@ Kmeans_info <- map_spectral_species_ML(Input_Image_File = Input_Image_File,
 Kmeans_info <- get(load("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info_PC1278.Rdata"))
 
 # save(Kmeans_info, file="~/data/biodivmapR_sent/RESULTS_aviris_extend/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info_PC1278.Rdata")
-Kmeans_info <- get(load("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info_PC1278.Rdata"))
+Kmeans_info <- get(load("~/data/biodivmapR_sent/RESULTS_aviris_extend/sent_crop_envi_BIL/SPCA/SpectralSpecies/Kmeans_info_PC1278.Rdata"))
 
 
 spectral_sp_map <- rast("~/data/biodivmapR_sent/RESULTS/sent_crop_envi/SPCA/SpectralSpecies/SpectralSpecies")
 spectral_sp_map <- rast("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi/SPCA/SpectralSpecies/SpectralSpecies")
+spectral_sp_map <- rast("~/data/biodivmapR_sent/RESULTS_aviris_extend/sent_crop_envi_BIL/SPCA/SpectralSpecies/SpectralSpecies1278")
+spectral_sp_map
 
 plot(spectral_sp_map$`Iter 2`, col=viridis_colors)
 
@@ -247,19 +198,18 @@ print("MAP ALPHA DIVERSITY")
 Index_Alpha   = c('Shannon','Simpson')
 Index_Alpha   = c('Simpson')
 Index_Alpha   = c('Shannon')
-map_alpha_div(Input_Image_File = Input_Image_File,
-              Output_Dir = Output_Dir,
-              TypePCA = TypePCA,
-              window_size = window_size,
-              nbCPU = nbCPU,
-              MaxRAM = MaxRAM,
-              Index_Alpha = Index_Alpha,
-              nbclusters = nbclusters)
+# map_alpha_div(Input_Image_File = Input_Image_File,
+#               Output_Dir = Output_Dir,
+#               TypePCA = TypePCA,
+#               window_size = window_size,
+#               nbCPU = nbCPU,
+#               MaxRAM = MaxRAM,
+#               Index_Alpha = Index_Alpha,
+#               nbclusters = nbclusters)
 
 # To have the name of the PCs selected to map the alpha diversity in the filename 
 # run the function saved in the document map_alpha_div_PC_naming.R to have it in the 
 # global environment
-
 map_alpha_div_ML(Input_Image_File = Input_Image_File,
               Output_Dir = Output_Dir,
               TypePCA = TypePCA,
@@ -292,43 +242,65 @@ shannon_mean_map <- rast("~/data/biodivmapR_sent/RESULTS/sent_crop_envi/SPCA/ALP
 
 viridis_colors <- viridis::plasma(20)
 na_col <- grey(0.8, alpha=0.5)
+na_col <- "white"
 m <- ggplot() +
   geom_spatraster(data = Shannon_map, na.rm = TRUE, aes(fill=Shannon_10_PC1278))+ #need to change the fill variable
-  # theme_map()+
-  theme_minimal()+
-  scale_fill_gradientn(colours = viridis_colors, na.value = na_col) +
-  labs(fill = substitute(paste("Shannon index", italic("H'"))))
-m  
+  theme_map()+
+  # theme_minimal()+
+  scale_fill_gradientn(colours = viridis_colors, na.value = na_col, n.breaks=3) +
+  labs(fill = substitute(paste("Shannon index ")))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=0.5), plot.margin=margin(t = 0, r = 0, b = 0, l = 0, unit = "pt"))+
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(expand = c(0,0))
+m 
 
 map_div <- m+
   ggspatial::annotation_north_arrow(
     location = "bl", which_north = "true",
-    pad_x = unit(0.5, "in"), pad_y = unit(0.65, "in"),
+    pad_x = unit(0.5, "in"), pad_y = unit(0.45, "in"),
     height = unit(0.7, "cm"),
     width = unit(0.7, "cm")
   )+
   ggspatial::annotation_scale(
     location = "bl", pad_x = unit(0.5, "in"),
-    pad_y = unit(0.4, "in"), 
+    pad_y = unit(0.2, "in"), 
     style="ticks"
   )
 map_div
+save_plot(filename = "~/data/output/final_plot/Shannon_map_sent_PC1278.png", base_height=4, map_div,bg = "white")
+save_plot(filename = "~/data/output/final_plot/Shannon_map_sent_aviris_aoi_PC1278.svg", base_height=3, map_div,bg = "white")
 
+
+########
+# plotting RGB view
+########
 sent_view <- rast("~/data/output/sent_crop_view.tif")
 plotRGB(sent_view, r=3, g=2, b=1, scale=10000, stretch="lin", smooth=T)
-sent_view_scale <-sent_view/7
+sent_view_scale <-sent_view/6
 
 boundary_strip_0708 <- st_read("~/scratch/reflectance_data/boundary_strip_0708.shp")
 boundary_strip_0708_proj <- st_transform(boundary_strip_0708,32613)
 area_interest <- st_read("areas_of_interest.gpkg")
 area_interest_proj <- st_transform(area_interest,32613)
 boundary_strip_0708_crop <- st_crop(boundary_strip_0708_proj, area_interest_proj)
+site_boundaries <-st_read("~/data/field_work/site_boundaries.gpkg")
+site_boundaries$site <- c("Site 1", "Site 2", "Site 3")
+bounding_box <- st_as_sf(as.polygons(ext(sent_view_scale)))
+st_crs(bounding_box) <- crs(site_boundaries)
 
+label_fill <- grey(0.9, alpha=0.5)
 s <- ggplot() +
   geom_spatraster_rgb(data = sent_view_scale, interpolate=T, r=3, g=2, b=1)+
-  # geom_sf(data=boundary_strip_0708_crop, aes(alpha=0), show.legend = FALSE)+
+  geom_sf(data=boundary_strip_0708_crop, fill="white", alpha=0.5, colour="red", show.legend = FALSE)+
+  geom_sf(data=site_boundaries, colour="red", fill="red", cex=5, show.legend = F)+
+  geom_sf(data=bounding_box, colour="red", fill="white", alpha=0, linewidth=0.65)+
+  geom_sf_label(data=site_boundaries, mapping=aes(label=site), fill="white", alpha=0.8, nudge_x = c(0), nudge_y = c(-2000),
+                inherit.aes = F, label.size=0, show.legend = F)+
+  geom_sf_label(boundary_strip_0708_crop, mapping=aes(label=paste("ABoVE campaign", "flight strip",sep="\n")), fill="white", alpha=0.8, nudge_x = c(-14000),
+                nudge_y = c(12500), inherit.aes = F, label.size=0, show.legend = F)+
+  geom_sf_label(data=bounding_box, mapping = aes(label="Sentinel-2 data"), fill="white", alpha=0.8, 
+                nudge_y = c(12000), nudge_x = c(15000))+
   theme_map()
-  # theme_minimal()
 s
 
 map_truecol <- s+
@@ -339,9 +311,10 @@ map_truecol <- s+
   pad_y = unit(0.4, "in"), height = unit(0.7, "cm"), width=unit(0.7, "cm"))
 map_truecol
 
-setwd("~/data/output")
-save_plot(filename = "sentinel_full_view_aviris0708_boundary.png", map_truecol, base_asp = 2, bg = "white")
-save_plot(filename = "sentinel_full_view.png", map_truecol, base_asp = 2, bg = "white")
+setwd("~/data/output/final_plot")
+save_plot(filename = "sentinel_full_view_aviris0708_boundary_field_site.png", map_truecol, base_height = 4, bg = "white")
+save_plot(filename = "sentinel_full_view_aviris0708_boundary_field_site.svg", map_truecol, base_height = 4, bg = "white")
+save_plot(filename = "sentinel_full_view.png", map_truecol, base_height = 5, bg = "white")
 
 cowplot::plot_grid(map_div, map_truecol, ncol = 2, align = "hv")
 
@@ -485,28 +458,96 @@ plot(corr_diff_PC_12_12789$corr, type="interval", breaks=c(-1,-0.5,-0.1,0.1,0.5,
 library(gstat)
 library(sp)
 library(raster)
-Shannon_map <- rast("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_10")
+Shannon_map <- rast("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_10_PC1278")
 Shannon_map_raster <- raster(Shannon_map)
 Shannon_map_sp <- as(Shannon_map_raster, "SpatialPointsDataFrame")
-
-vario_close <- variogram(Shannon_10~1, data=Shannon_map_sp, cutoff=5000, width=100)
+vario_close <- variogram(Shannon_10_PC1278~1, data=Shannon_map_sp, cutoff=5000, width=100)
 plot(vario_close)
-vario_far <- variogram(Shannon_10~1, data=Shannon_map_sp, cutoff=30000, width=1000)
-plot(vario_far)
-
+# vario_far <- variogram(Shannon_10~1, data=Shannon_map_sp, cutoff=30000, width=1000)
+# plot(vario_far)
 try <- vgm(0.1, "Mat", 2000, nugget=0.1)
-plot(try, cutoff=15000)
-
-vario_fit_close <- fit.variogram(vario_close, vgm(0.1, "Mat", 1000, nugget=0.1), fit.kappa = TRUE)
-vario_fit_far <- fit.variogram(vario_far, vgm(0.05, "Mat", 4000, nugget=0.12), fit.kappa = TRUE)
-
-plot(vario_fit_far, cutoff=5000)
-plot(vario_far, vario_fit_far)
-
-
+try <- vgm(0.1, "Mat", 500, nugget=0.1)
+plot(try, cutoff=5000)
+vario_fit_close <- fit.variogram(vario_close, try, fit.kappa = TRUE)
+# vario_fit_far <- fit.variogram(vario_far, vgm(0.05, "Mat", 4000, nugget=0.12), fit.kappa = TRUE)
+# plot(vario_fit_far, cutoff=5000)
+# plot(vario_far, vario_fit_far)
 plot(vario_fit_close, cutoff=5000)
 plot(vario_close, vario_fit_close)
+vario_fit_close
+range_sh <- round(vario_fit_close$range[2], digits = 2)
+preds = variogramLine(vario_fit_close, maxdist = 5000)
+semivar_shannon <- ggplot()+
+  geom_point(data=vario_close, aes(x=dist, y=gamma), pch=21, cex=2,  col="dodgerblue1")+
+  geom_line(data=preds, aes(x=dist, y=gamma), col="dodgerblue1")+
+  labs(
+    y=expression(atop("semi-variance of Sentinel-2-derived", 
+                               "Shannon index")), 
+    x=("distance [m]"))+
+  theme_classic()+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), text=element_text(size=14),
+        axis.title.y = element_text(vjust=3), 
+        plot.margin=margin(t = 20, r = 20, b = 20, l = 20, unit = "pt"))+
+  coord_cartesian(xlim =c(250, 5000), ylim = c(0, 0.15))+
+  annotate("text", x=3500, y=0.02, label = paste("Range:", range_sh, sep=" "), size=6)
+semivar_shannon
 
+# save_plot(plot, filename = "~/data/output/final_plot/variogram_close_shannon_res100_width100_cutoff5000.png", base_height = 4)
+
+# sd (elev)
+sd_ele_100 <- rast("~/data/ArcDEM/ArcDEM_masked_10_res.tif")
+sd_ele_100_raster <- raster(sd_ele_100)
+sd_ele_100_sp <- as(sd_ele_100_raster, "SpatialPointsDataFrame")
+vario_log_ele_close <- variogram(log(X29_21_1_1_2m_v4.1_dem)~1, data=sd_ele_100_sp, cutoff=5000, width=100)
+plot(vario_log_ele_close)
+try <- vgm(0.1, "Exp", 1000, nugget=0.12)
+plot(try, cutoff=5000)
+vario_fit_close <- fit.variogram(vario_log_ele_close, try, fit.kappa = TRUE)
+plot(vario_log_ele_close, vario_fit_close, xlab="distance [m]")
+vario_fit_close
+plot(vario_log_ele_close)
+plot(vario_fit_close, cutoff=5000)
+plot(vario_log_ele_close, vario_fit_close)
+range_ele <- round(vario_fit_close$range[2], digits = 2)
+preds = variogramLine(vario_fit_close, maxdist = 5000)
+semivar_ele <- ggplot()+
+  geom_point(data=vario_log_ele_close, aes(x=dist, y=gamma), pch=21, cex=2,  col="dodgerblue1")+
+  geom_line(data=preds, aes(x=dist, y=gamma), col="dodgerblue1")+
+  labs(y=expression(paste("semi-variance of ", sigma, " (elevation)")), x=("distance [m]"))+
+  theme_classic()+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), text=element_text(size=14),
+        plot.margin=margin(t = 20, r = 20, b = 20, l = 20, unit = "pt"))+
+  coord_cartesian(xlim =c(250, 5000), ylim = c(0, 0.7))+
+  annotate("text", x=3500, y=0.1, label = paste("Range:", range_ele, sep=" "), size=6)
+semivar_ele
+
+# sd(slope)
+sd_slope_100 <- rast("~/data/ArcDEM/sd_slope_masked_10_res.tif")
+sd_slope_100_raster <- raster(sd_slope_100)
+sd_slope_100_sp <- as(sd_slope_100_raster, "SpatialPointsDataFrame")
+vario_slope_close <- variogram(log(slope)~1, data=sd_slope_100_sp, cutoff=5000, width=100)
+plot(vario_slope_close)
+try <- vgm(0.1, "Exp", 1000, nugget=0.12)
+plot(try, cutoff=5000)
+vario_fit_slope_close <- fit.variogram(vario_slope_close, try, fit.kappa = TRUE)
+plot(vario_slope_close, vario_fit_slope_close, xlab="distance [m]")
+vario_fit_slope_close
+range_sp <- round(vario_fit_slope_close$range[2], digits = 2)
+
+preds = variogramLine(vario_fit_slope_close, maxdist = 5000)
+semivar_slope <- ggplot()+
+  geom_point(data=vario_slope_close, aes(x=dist, y=gamma), pch=21, cex=2,  col="dodgerblue1")+
+  geom_line(data=preds, aes(x=dist, y=gamma), col="dodgerblue1")+
+  labs(y=expression(paste("semi-variance of ", sigma, " (slope)")), x=("distance [m]"))+
+  theme_classic()+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), text=element_text(size=14), 
+        plot.margin=margin(t = 20, r = 20, b = 20, l = 20, unit = "pt"))+
+  coord_cartesian(xlim =c(250, 5000), ylim = c(0, 0.4))+
+  annotate("text", x=3500, y=0.05, label = paste("Range:", range_sp, sep=" "), size=6)
+semivar_slope
+
+vario_together <- plot_grid(semivar_shannon, semivar_slope, semivar_ele, align = "v", ncol=1, axis = "r",labels="AUTO", label_size = 25)
+save_plot(vario_together, filename = "~/data/output/final_plot/variogram_ele_slope_shannon.png",base_height = 15, base_width = 6, bg="white")
 
 ##################
 # try out distance
