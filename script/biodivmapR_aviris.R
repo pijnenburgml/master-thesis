@@ -40,10 +40,9 @@ FilterPCA <- F
 # window size for computation of spectral diversity
 window_size <- 20
 # # computational parameters
-nbCPU <- 6
-MaxRAM <- 5
+nbCPU <- 32
+MaxRAM <- 8
 # number of clusters (spectral species)
-nbclusters <- 50
 nbclusters <- 20
 
 ################################################################################
@@ -51,7 +50,7 @@ nbclusters <- 20
 ## https://jbferet.github.io/biodivMapR/articles/biodivMapR_4.html            ##
 ################################################################################
 print("PERFORM DIMENSIONALITY REDUCTION")
-PCA_Output <- perform_PCA_ML(Input_Image_File = Input_Image_File,
+PCA_Output <- perform_PCA(Input_Image_File = Input_Image_File,
                           Input_Mask_File = Input_Mask_File,
                           Output_Dir = Output_Dir,
                           TypePCA = TypePCA,
@@ -60,7 +59,7 @@ PCA_Output <- perform_PCA_ML(Input_Image_File = Input_Image_File,
                           nbCPU = nbCPU,
                           MaxRAM = MaxRAM)
 
-# save(PCA_Output, file="~/data/biodivmapR_Aviris/RESULTS/ang20190802t220708_rfl_rect/SPCA/PCA/PCA_Output.Rdata")
+save(PCA_Output, file="~/data/biodivmapR_Aviris/RESULTS/ang20190802t220708_rfl_rect/SPCA/PCA/PCA_Output.Rdata", overwrite=T)
 get(load("~/data/biodivmapR_Aviris/RESULTS/ang20190802t220708_rfl_rect/SPCA/PCA/PCA_Output.Rdata"))
 
 
@@ -155,8 +154,6 @@ m <- ggplot() +
   scale_x_continuous(expand = c(0,0))+
   labs(fill = substitute(paste("Shannon index")))
 m  
-
-
 map_div <- m+
   ggspatial::annotation_north_arrow(
     location = "bl", which_north = "true",
@@ -201,9 +198,11 @@ library(spatialEco)
 aviris_map <- rast("~/data/biodivmapR_Aviris/RESULTS/ang20190802t220708_rfl_rect/SPCA/ALPHA/Shannon_20_PC1289")
 # aviris_map <- rast("~/data/biodivmapR_Aviris/RESULTS/ang20190802t220708_rfl_rect/SPCA/ALPHA/Shannon_10_PC1289")
 sentinel_map <- rast("~/data/biodivmapR_sent/RESULTS_aviris_extend/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_10_PC1278")
-aviris_map_resample <- resample(aviris_map, sentinel_map, method="bilinear")
-corr_aviris_sent <- raster.modified.ttest(aviris_map_resample, sentinel_map)
-corr_aviris_sent_crop <- crop(corr_aviris_sent, aviris_map)
+sentinel_map_crop <- crop(sentinel_map, aviris_map)
+ext(aviris_map) <- ext(sentinel_map_crop)
+# aviris_map_resample <- resample(aviris_map, sentinel_map, method="bilinear")
+corr_aviris_sent <- raster.modified.ttest(aviris_map, sentinel_map_crop)
+# corr_aviris_sent_crop <- crop(corr_aviris_sent, aviris_map)
 viridis_colors <- viridis::plasma(20)
 plot(corr_aviris_sent$corr, type="interval", breaks=c(-1,0,0.5,1), main="correlation between Shannon index based on aviris data and Sentinel-2 data", 
      col=c(viridis_colors[c(4,16)], "#009200"), plg=list(title="correlation coefficient"))
@@ -211,7 +210,7 @@ plot(corr_aviris_sent$corr, type="interval", breaks=c(-1,0,0.5,1), main="correla
 corr_aviris_sent$bin <- raster::cut(as.vector(corr_aviris_sent$corr), breaks = c(-1,0,0.5,1), labels=c("neg", "low", "high"))
 
 corr_plot <- ggplot() +
-  geom_spatraster(data = corr_aviris_sent_crop, na.rm = TRUE, aes(fill=bin))+
+  geom_spatraster(data = corr_aviris_sent, na.rm = TRUE, aes(fill=bin))+
   theme_map()+
   scale_fill_manual(values=c(viridis_colors[c(4,16)], "#009200"), na.value="white", labels=c("-1 - 0", "0 - 0.5", "0.5 - 1", ""), name="Correlation coefficient", guide = guide_legend(reverse = TRUE))+
   theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=0.5), plot.margin=margin(t = 0, r = 0, b = 0, l = 0, unit = "pt"))+
@@ -265,7 +264,9 @@ save_plot(s_div, filename = "~/data/output/final_plot/Shannon_sentinel_aviris_ao
 # strip_0708_RGB_scaled <-strip_0708_RGB*2500
 # t <- ggplot() +
 #   geom_spatraster_rgb(data = strip_0708_RGB_scaled, r=1, g=2, b=3, interpolate=T)+
-#   theme_map()
+#   theme_map()+
+#   theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=0.5), plot.margin=margin(t = 0, r = 0, b = 0, l = 0, unit = "pt"))+
+#   
 # t
 # 
 # map_truecol <- t+
@@ -274,7 +275,38 @@ save_plot(s_div, filename = "~/data/output/final_plot/Shannon_sentinel_aviris_ao
 #   ggspatial::annotation_scale(location = "bl", pad_x = unit(0.5, "in"), pad_y = unit(0.4, "in"),style="ticks")
 # map_truecol
 
-
-aviris_plot_together <- plot_grid(map_truecol, map_div, s_div, corr_plot, align = "v", ncol=1, axis = "r", labels="AUTO")
+aviris_plot_together <- plot_grid(map_truecol, map_div, s_div, corr_plot, align = "v", ncol=1, axis = "r")
 aviris_plot_together
-save_plot(aviris_plot_together, filename = "~/data/output/final_plot/aviris_plot_together_n_RGB.png", base_height = 12, bg="white")
+save_plot(aviris_plot_together, filename = "~/data/output/final_plot/aviris_plot_together_n_RGB.png", base_height = 15, bg="white")
+
+aviris_plot_together <- plot_grid(map_div, s_div, map_truecol, corr_plot,  align = "v", ncol=2, axis = "r", greedy = F)
+aviris_plot_together
+save_plot(aviris_plot_together, filename = "~/data/output/final_plot/aviris_plot_together_n_RGB_square.png",base_width = 12, base_height = 5.5, bg="white")
+
+
+####
+# distribution of the shannon index
+
+aviris_map <- raster::raster("~/data/biodivmapR_Aviris/RESULTS/ang20190802t220708_rfl_rect/SPCA/ALPHA/Shannon_20_PC1289")
+try <- strucDiv(aviris_map, wsl=3, fun=contrast)
+aviris_map$bin <- raster::cut(as.vector(aviris_map$Shannon_20_PC1289), breaks = c(0,1.5,2,3), labels=c("low", "medium", "high"))
+plot(aviris_map$bin)
+aviris_shannon_bin <- as.vector(aviris_map$bin) # assuming 1 --> neg, 2 --> low, 3 --> high
+aviris_shannon_bin_noNA <- aviris_shannon_bin[is.na(aviris_shannon_bin)==F]
+perc_area_neg <- (table(aviris_shannon_bin_noNA)[1]*10000)/(length(aviris_shannon_bin_noNA)*10000)*100
+perc_area_low <- (table(aviris_shannon_bin_noNA)[2]*10000)/(length(aviris_shannon_bin_noNA)*10000)*100
+perc_area_high<- (table(aviris_shannon_bin_noNA)[3]*10000)/(length(aviris_shannon_bin_noNA)*10000)*100
+
+
+sentinel_map <- raster::raster("~/data/biodivmapR_sent/RESULTS_aviris_extend/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_10_PC1278")
+try_sent <- strucDiv(sentinel_map, wsl=3, fun=contrast)
+sentinel_map$bin <- raster::cut(as.vector(sentinel_map$Shannon_10_PC1278), breaks = c(0,1.5,2,3), labels=c("low", "medium", "high"))
+plot(sentinel_map$bin)
+sentinel_shannon_bin <- as.vector(sentinel_map$bin) # assuming 1 --> neg, 2 --> low, 3 --> high
+sentinel_shannon_bin_noNA <- sentinel_shannon_bin[is.na(sentinel_shannon_bin)==F]
+perc_area_neg <- (table(sentinel_shannon_bin_noNA)[1]*10000)/(length(sentinel_shannon_bin_noNA)*10000)*100
+perc_area_low <- (table(sentinel_shannon_bin_noNA)[2]*10000)/(length(sentinel_shannon_bin_noNA)*10000)*100
+perc_area_high <- (table(sentinel_shannon_bin_noNA)[3]*10000)/(length(sentinel_shannon_bin_noNA)*10000)*100
+
+
+
