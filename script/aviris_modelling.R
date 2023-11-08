@@ -60,13 +60,6 @@ for (x in 1:length(window_size)){
 
 # result in maps of resolution 100m, 200m, 300m.
 
-# for (x in 1:length(window_size)) {
-#   Shannon <- rast(paste("~/data/biodivmapR_Aviris/RESULTS/ang20190802t220708_rfl_rect/SPCA/ALPHA/Shannon_", window_size[x], "_PC12", sep=""))
-#   temp_rast <- rast(ext(Shannon), resolution=window_size[x]*5)  
-#   Shannon_resampled <- resample(Shannon, temp_rast)
-#   writeRaster(Shannon_resampled, filetype="ENVI", filename = paste("~/scratch/INLA_modelling/Aviris_modelling/Shannon_PC12_res_", window_size[x]*5, sep=""))
-# }
-
 
 #############
 # preparing elevation data
@@ -80,27 +73,6 @@ fact <- c(50, 100, 150)
 multiple <- window_size*10
 extended_aoi <- ext(ext(tile)[1]-multiple[3], ext(tile)[2]+multiple[3], ext(tile)[3]-multiple[3], ext(tile)[4]+multiple[3])
 tile_DEM_crop <- crop(tile_DEM_proj, extended_aoi)
-
-# # sd(elevation)
-# for(x in 1:length(fact)){
-#   Shannon <- rast(paste("~/data/biodivmapR_Aviris/RESULTS/ang20190802t220708_rfl_rect/SPCA/ALPHA/Shannon_", window_size[x], "_PC1289", sep="")) ##have to add the name of the raster
-#   temp_rast <- rast(ext(Shannon), resolution = 2)
-#   tile_DEM_crop_resample <- resample(tile_DEM_crop, temp_rast, method = "bilinear")
-#   tile_DEM_crop_aggregated <- aggregate(tile_DEM_crop_resample, fact=fact[x], fun="sd")
-#   tile_DEM_masked <- mask(tile_DEM_crop_aggregated, Shannon)
-#   writeRaster(tile_DEM_masked, filename = paste("~/data/ArcDEM/sd_ele_aviris_", window_size[x], "_res.tif", sep=""), overwrite=T)
-# }
-
-
-# # mean(elevation)
-# for(x in 1:length(fact)){
-#   Shannon <- rast(paste("~/data/biodivmapR_Aviris/RESULTS/ang20190802t220708_rfl_rect/SPCA/ALPHA/Shannon_", window_size[x], "_PC1289", sep="")) ##have to add the name of the raster
-#   temp_rast <- rast(ext(Shannon), resolution = 2)
-#   tile_DEM_crop_resample <- resample(tile_DEM_crop, temp_rast, method = "bilinear")
-#   tile_DEM_crop_aggregated <- aggregate(tile_DEM_crop_resample, fact=fact[x], fun="mean")
-#   tile_DEM_masked <- mask(tile_DEM_crop_aggregated, Shannon)
-#   writeRaster(tile_DEM_masked, filename = paste("~/data/ArcDEM/mean_ele_aviris_", window_size[x], "_res.tif", sep=""), overwrite=T)
-# }
 
 
 # sd(slope)
@@ -123,20 +95,6 @@ for(x in 1:length(fact)){
 window_size <- c(20, 40, 60)
 x <- 1
 Shannon <- rast(paste("~/data/biodivmapR_Aviris/RESULTS/ang20190802t220708_rfl_rect/SPCA/ALPHA/Shannon_", window_size[x], "_PC1289", sep="")) ##have to add the name of the raster
-zero_color <- "red"
-plot(Shannon$Shannon_20_PC1289, col = c(zero_color, grey.colors(30)))
-viridis_colors <- viridis::plasma(20)
-viridis_colors <- c("#F0F921FF", rep("#0D0887FF", 19))
-ggplot()+
-  geom_spatraster(data = Shannon, na.rm = TRUE, aes(fill=Shannon_20_PC1289))+ #need to change the fill variable
-  theme_map()+
-  # theme_minimal()+
-  scale_fill_gradientn(colours = viridis_colors, n.breaks=3) +
-  labs(fill = substitute(paste("Shannon index ")))+
-  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=0.5), plot.margin=margin(t = 0, r = 0, b = 0, l = 0, unit = "pt"))+
-  scale_y_continuous(expand = c(0,0))+
-  scale_x_continuous(expand = c(0,0))
-
 Shannon_matrix <- as.matrix(Shannon, wide=T)
 Slope <- rast(paste("~/data/ArcDEM/sd_slope_aviris_", window_size[x], "_res.tif", sep=""))
 Slope_matrix <- as.matrix(Slope, wide=T)
@@ -154,17 +112,15 @@ node = 1:n
 data <- data.frame(Shannon_index = s, slope = sl, node=node)
 data <- data[-c(which(is.na(s))),]
 nrow(data)
-# data <- data[-c(which(data$Shannon_index==1)), ]
-# nrow(data)
 
-# formula= Shannon_index ~ 1 + slope +
-#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
-# Gamma_shannon_slope_res_100 <- inla(formula,     
-#                                     family = "gamma",
-#                                     data = data,
-#                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-# summary(Gamma_shannon_slope_res_100)
-# save(Gamma_shannon_slope_res_100, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_100.Rdata")
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_slope_res_100 <- inla(formula,
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_slope_res_100)
+save(Gamma_shannon_slope_res_100, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_100.Rdata")
 get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_100.Rdata"))
 
 observed <- data$Shannon_index
@@ -184,7 +140,6 @@ qq100 <- ggplot()+
   geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
   ylab("")+
   xlab("")+
-  # coord_cartesian(xlim = c(1, 3.5))+
   scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
   scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
   theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
@@ -219,17 +174,15 @@ node = 1:n
 data <- data.frame(Shannon_index = s, slope = sl, node=node)
 data <- data[-c(which(is.na(s))),]
 nrow(data)
-# data <- data[-c(which(data$Shannon_index==1)), ]
-# nrow(data)
 
-# formula= Shannon_index ~ 1 + slope +
-#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
-# Gamma_shannon_slope_res_200 <- inla(formula,     
-#                                     family = "gamma",
-#                                     data = data,
-#                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-# summary(Gamma_shannon_slope_res_200)
-# save(Gamma_shannon_slope_res_200, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_200.Rdata")
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_slope_res_200 <- inla(formula,
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_slope_res_200)
+save(Gamma_shannon_slope_res_200, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_200.Rdata")
 get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_200.Rdata"))
 
 observed <- data$Shannon_index
@@ -249,7 +202,6 @@ qq200 <- ggplot()+
   geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
   ylab("")+
   xlab("")+
-  # coord_cartesian(xlim = c(1, 3.5))+
   scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
   scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
   theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
@@ -281,14 +233,14 @@ node = 1:n
 data <- data.frame(Shannon_index = s, slope = sl, node=node)
 data <- data[-c(which(is.na(s))),]
 
-# formula= Shannon_index ~ 1 + slope +
-#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
-# Gamma_shannon_slope_res_300 <- inla(formula,     
-#                                     family = "gamma",
-#                                     data = data,
-#                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-# summary(Gamma_shannon_slope_res_300)
-# save(Gamma_shannon_slope_res_300, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_300.Rdata")
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_slope_res_300 <- inla(formula,
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_slope_res_300)
+save(Gamma_shannon_slope_res_300, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_300.Rdata")
 get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_300.Rdata"))
 
 observed <- data$Shannon_index
@@ -308,7 +260,6 @@ qq300 <- ggplot()+
   geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
   ylab("")+
   xlab("")+
-  # coord_cartesian(xlim = c(1, 3.5))+
   scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
   scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
   theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
@@ -331,96 +282,6 @@ y.grob <- textGrob("Observe Shannon index from AVIRIS-NG data", rot=90, gp=gpar(
 qqplot_sd_slope_together_final <- grid.arrange(arrangeGrob(qqplot_sd_slope_together,bottom = x.grob, left = y.grob))
 qqplot_sd_slope_together_final
 save_plot(qqplot_sd_slope_together_final, filename = "~/data/output/final_plot/qqplot_sd_slope_together_final_aviris.png", base_height = 25, base_width = 11,bg="white")
-
-###########
-# Modelling sd(ele)
-###########
-window_size <- c(20, 40, 60)
-x <- 1
-Shannon <- rast(paste("~/data/biodivmapR_Aviris/RESULTS/ang20190802t220708_rfl_rect/SPCA/ALPHA/Shannon_", window_size[x], "_PC1289", sep="")) ##have to add the name of the raster
-Shannon_matrix <- as.matrix(Shannon, wide=T)
-Ele <- rast(paste("~/data/ArcDEM/sd_ele_aviris_", window_size[x], "_res.tif", sep=""))
-Ele_matrix <- as.matrix(Ele, wide=T)
-nrow= nrow(Shannon_matrix)
-ncol= ncol(Shannon_matrix)
-n = nrow*ncol
-s = inla.matrix2vector(Shannon_matrix)
-table(is.na(s))
-s[!is.na(s)] <- s[!is.na(s)]+ 1
-e <- inla.matrix2vector(Ele_matrix)
-table(is.na(Ele_matrix))
-table(is.na(Shannon_matrix))
-node = 1:n
-data <- data.frame(Shannon_index = s, Elevation = e, node=node)
-data <- data[-c(which(is.na(s))),]
-
-formula= Shannon_index ~ 1 + Elevation +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_ele_res_100 <- inla(formula,     
-                                    family = "gamma",
-                                    data = data,
-                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-summary(Gamma_shannon_ele_res_100)
-save(Gamma_shannon_ele_res_100, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_ele_res_100.Rdata")
-get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_ele_res_100.Rdata"))
-
-# 200m 
-x <- 2
-Shannon <- rast(paste("~/data/biodivmapR_Aviris/RESULTS/ang20190802t220708_rfl_rect/SPCA/ALPHA/Shannon_", window_size[x], "_PC1289", sep="")) ##have to add the name of the raster
-Shannon_matrix <- as.matrix(Shannon, wide=T)
-Ele <- rast(paste("~/data/ArcDEM/sd_ele_aviris_", window_size[x], "_res.tif", sep=""))
-Ele_matrix <- as.matrix(Ele, wide=T)
-nrow= nrow(Shannon_matrix)
-ncol= ncol(Shannon_matrix)
-n = nrow*ncol
-s = inla.matrix2vector(Shannon_matrix)
-table(is.na(s))
-s[!is.na(s)] <- s[!is.na(s)]+ 1
-e <- inla.matrix2vector(Ele_matrix)
-table(is.na(Ele_matrix))
-table(is.na(Shannon_matrix))
-node = 1:n
-data <- data.frame(Shannon_index = s, Elevation = e, node=node)
-data <- data[-c(which(is.na(s))),]
-
-formula= Shannon_index ~ 1 + Elevation +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_ele_res_200 <- inla(formula,     
-                                  family = "gamma",
-                                  data = data,
-                                  control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-summary(Gamma_shannon_ele_res_200)
-save(Gamma_shannon_ele_res_200, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_ele_res_200.Rdata")
-get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_ele_res_200.Rdata"))
-
-# 300m 
-x <- 3
-Shannon <- rast(paste("~/data/biodivmapR_Aviris/RESULTS/ang20190802t220708_rfl_rect/SPCA/ALPHA/Shannon_", window_size[x], "_PC1289", sep="")) ##have to add the name of the raster
-Shannon_matrix <- as.matrix(Shannon, wide=T)
-Ele <- rast(paste("~/data/ArcDEM/sd_ele_aviris_", window_size[x], "_res.tif", sep=""))
-Ele_matrix <- as.matrix(Ele, wide=T)
-nrow= nrow(Shannon_matrix)
-ncol= ncol(Shannon_matrix)
-n = nrow*ncol
-s = inla.matrix2vector(Shannon_matrix)
-table(is.na(s))
-s[!is.na(s)] <- s[!is.na(s)]+ 1
-e <- inla.matrix2vector(Ele_matrix)
-table(is.na(Ele_matrix))
-table(is.na(Shannon_matrix))
-node = 1:n
-data <- data.frame(Shannon_index = s, Elevation = e, node=node)
-data <- data[-c(which(is.na(s))),]
-
-formula= Shannon_index ~ 1 + Elevation +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_ele_res_300 <- inla(formula,     
-                                  family = "gamma",
-                                  data = data,
-                                  control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-summary(Gamma_shannon_ele_res_300)
-save(Gamma_shannon_ele_res_300, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_ele_res_300.Rdata")
-get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_ele_res_300.Rdata"))
 
 ############
 # prepare corresponding Sentinel data
@@ -482,18 +343,6 @@ for(x in 1:length(fact)){
   writeRaster(slope_mask, filename = paste("~/data/ArcDEM/sd_slope_sent_aviris_aoi_", window_size[x], "_res.tif", sep=""), overwrite=T)
 }
 
-tile_DEM_crop <- crop(tile_DEM_proj, area_interest_proj)
-# sd(elevation)
-for(x in 1:length(fact)){
-  Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_aviris_extend/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_", window_size[x], "_PC1278", sep="")) ##have to add the name of the raster
-  temp_rast <- rast(extended_aoi, resolution = 2)
-  tile_DEM_crop_resample <- resample(tile_DEM_crop, temp_rast, method = "bilinear")
-  tile_DEM_crop_aggregated <- aggregate(tile_DEM_crop_resample, fact=fact[x], fun="sd")
-  tile_DEM_crop_crop <- crop(tile_DEM_crop_aggregated, Shannon)
-  ext(tile_DEM_crop_crop) <- ext(Shannon)
-  tile_DEM_masked <- mask(tile_DEM_crop_crop, Shannon)
-  writeRaster(tile_DEM_masked, filename = paste("~/data/ArcDEM/sd_ele_sent_aviris_aoi_", window_size[x], "_res.tif", sep=""))
-}
 
 ###########
 # Modelling sd(slope)
@@ -519,14 +368,14 @@ node = 1:n
 data <- data.frame(Shannon_index = s, slope = sl, node=node)
 data <- data[-c(which(is.na(s))),]
 
-# formula= Shannon_index ~ 1 + slope +
-#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
-# Gamma_shannon_slope_res_100_sent <- inla(formula,     
-#                                     family = "gamma",
-#                                     data = data,
-#                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-# summary(Gamma_shannon_slope_res_100_sent)
-# save(Gamma_shannon_slope_res_100_sent, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_100_sent.Rdata")
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_slope_res_100_sent <- inla(formula,
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_slope_res_100_sent)
+save(Gamma_shannon_slope_res_100_sent, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_100_sent.Rdata")
 get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_100_sent.Rdata"))
 
 observed <- data$Shannon_index
@@ -546,7 +395,6 @@ qq100 <- ggplot()+
   geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
   ylab("")+
   xlab("")+
-  # coord_cartesian(xlim = c(1, 3.5))+
   scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
   scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
   theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
@@ -583,14 +431,14 @@ data <- data[-c(which(is.na(s))),]
 hist(data$Shannon_index)
 plot(data$Shannon_index~log(data$slope))
 
-# formula= Shannon_index ~ 1 + slope +
-#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
-# Gamma_shannon_slope_res_200_sent <- inla(formula,     
-#                                     family = "gamma",
-#                                     data = data,
-#                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-# summary(Gamma_shannon_slope_res_200_sent)
-# save(Gamma_shannon_slope_res_200_sent, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_200_sent.Rdata")
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_slope_res_200_sent <- inla(formula,
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_slope_res_200_sent)
+save(Gamma_shannon_slope_res_200_sent, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_200_sent.Rdata")
 get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_200_sent.Rdata"))
 
 observed <- data$Shannon_index
@@ -610,7 +458,6 @@ qq200 <- ggplot()+
   geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
   ylab("")+
   xlab("")+
-  # coord_cartesian(xlim = c(1, 3.5))+
   scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
   scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
   theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
@@ -642,14 +489,14 @@ node = 1:n
 data <- data.frame(Shannon_index = s, slope = sl, node=node)
 data <- data[-c(which(is.na(s))),]
 
-# formula= Shannon_index ~ 1 + slope +
-#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
-# Gamma_shannon_slope_res_300_sent <- inla(formula,     
-#                                     family = "gamma",
-#                                     data = data,
-#                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-# summary(Gamma_shannon_slope_res_300_sent)
-# save(Gamma_shannon_slope_res_300_sent, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_300_sent.Rdata")
+formula= Shannon_index ~ 1 + slope +
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+Gamma_shannon_slope_res_300_sent <- inla(formula,
+                                    family = "gamma",
+                                    data = data,
+                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+summary(Gamma_shannon_slope_res_300_sent)
+save(Gamma_shannon_slope_res_300_sent, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_300_sent.Rdata")
 get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_300_sent.Rdata"))
 
 observed <- data$Shannon_index
@@ -669,7 +516,6 @@ qq300 <- ggplot()+
   geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
   ylab("")+
   xlab("")+
-  # coord_cartesian(xlim = c(1, 3.5))+
   scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
   scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
   theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
@@ -683,8 +529,8 @@ qq300
 
 
 qqplot_sd_slope_together <- plot_grid(qq100, qq200, qq300, align = "v", ncol=1, axis = "r", labels="AUTO", label_size = 25)
-qqplot_sd_slope_together
-save_plot(qqplot_sd_slope_together, filename = "~/data/output/final_plot/qqplot_sd_slope_together_sent.png", base_height = 25, base_width = 10,bg="white")
+# qqplot_sd_slope_together
+# save_plot(qqplot_sd_slope_together, filename = "~/data/output/final_plot/qqplot_sd_slope_together_sent.png", base_height = 25, base_width = 10,bg="white")
 
 library(grid)
 library(gridExtra)
@@ -695,105 +541,12 @@ qqplot_sd_slope_together_sent
 save_plot(qqplot_sd_slope_together_sent, filename = "~/data/output/final_plot/qqplot_sd_slope_together_final_sent.png", base_height = 25, base_width = 11,bg="white")
 
 
-###########
-# Modelling sd(elevation)
-###########
-# 100m 
-window_size <- c(10, 20, 30)
-x <- 1
-Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_aviris_extend/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_", window_size[x], "_PC1278", sep=""))
-Shannon_matrix <- as.matrix(Shannon, wide=T)
-Elevation <- rast(paste("~/data/ArcDEM/sd_ele_sent_aviris_aoi_", window_size[x], "_res.tif", sep=""))
-Ele_matrix <- as.matrix(Elevation, wide=T)
-nrow= nrow(Shannon_matrix)
-ncol= ncol(Shannon_matrix)
-n = nrow*ncol
-s = inla.matrix2vector(Shannon_matrix)
-table(is.na(s))
-s[!is.na(s)] <- s[!is.na(s)]+ 1
-e <- inla.matrix2vector(Ele_matrix)
-table(is.na(Ele_matrix))
-table(is.na(Shannon_matrix))
-node = 1:n
-data <- data.frame(Shannon_index = s, Ele = e, node=node)
-data <- data[-c(which(is.na(s))),]
-
-formula= Shannon_index ~ 1 + Ele +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_ele_res_100_sent <- inla(formula,     
-                                    family = "gamma",
-                                    data = data,
-                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-summary(Gamma_shannon_ele_res_100_sent)
-save(Gamma_shannon_ele_res_100_sent, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_ele_res_100_sent.Rdata")
-get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_ele_res_100_sent.Rdata"))
-
-# 200m 
-window_size <- c(10, 20, 30)
-x <- 2
-Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_aviris_extend/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_", window_size[x], "_PC1278", sep=""))
-Shannon_matrix <- as.matrix(Shannon, wide=T)
-Elevation <- rast(paste("~/data/ArcDEM/sd_ele_sent_aviris_aoi_", window_size[x], "_res.tif", sep=""))
-Ele_matrix <- as.matrix(Elevation, wide=T)
-nrow= nrow(Shannon_matrix)
-ncol= ncol(Shannon_matrix)
-n = nrow*ncol
-s = inla.matrix2vector(Shannon_matrix)
-table(is.na(s))
-s[!is.na(s)] <- s[!is.na(s)]+ 1
-ele <- inla.matrix2vector(Ele_matrix)
-table(is.na(Ele_matrix))
-table(is.na(Shannon_matrix))
-node = 1:n
-data <- data.frame(Shannon_index = s, Ele = ele, node=node)
-data <- data[-c(which(is.na(s))),]
-
-formula= Shannon_index ~ 1 + Ele +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_ele_res_200_sent <- inla(formula,     
-                                  family = "gamma",
-                                  data = data,
-                                  control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-summary(Gamma_shannon_ele_res_200_sent)
-save(Gamma_shannon_ele_res_200_sent, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_ele_res_200_sent.Rdata")
-get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_ele_res_200_sent.Rdata"))
-
-
-# 300m 
-window_size <- c(10, 20, 30)
-x <- 3
-Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_aviris_extend/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_", window_size[x], "_PC1278", sep=""))
-Shannon_matrix <- as.matrix(Shannon, wide=T)
-Elevation <- rast(paste("~/data/ArcDEM/sd_ele_sent_aviris_aoi_", window_size[x], "_res.tif", sep=""))
-Ele_matrix <- as.matrix(Elevation, wide=T)
-nrow= nrow(Shannon_matrix)
-ncol= ncol(Shannon_matrix)
-n = nrow*ncol
-s = inla.matrix2vector(Shannon_matrix)
-table(is.na(s))
-s[!is.na(s)] <- s[!is.na(s)]+ 1
-ele <- inla.matrix2vector(Ele_matrix)
-table(is.na(Ele_matrix))
-table(is.na(Shannon_matrix))
-node = 1:n
-data <- data.frame(Shannon_index = s, Ele = ele, node=node)
-data <- data[-c(which(is.na(s))),]
-
-formula= Shannon_index ~ 1 + Ele +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_ele_res_300_sent <- inla(formula,     
-                                  family = "gamma",
-                                  data = data,
-                                  control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-summary(Gamma_shannon_ele_res_300_sent)
-save(Gamma_shannon_ele_res_300_sent, file="~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_ele_res_300_sent.Rdata")
-get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_ele_res_300_sent.Rdata"))
-
-
-
 ############
-# plotting
+# plotting model coefficent estimates 
 ############
+
+### coefficient of model derived from AVIRIS-NG data
+
 get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_100.Rdata"))
 get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_200.Rdata"))
 get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_300.Rdata"))
@@ -828,29 +581,9 @@ sd_slope_aviris_plot <- ggplot(data = Slope_df_aviris,
   )
 sd_slope_aviris_plot
 
-# ele
-Ele_df_aviris <- rbind(Gamma_shannon_ele_res_100$summary.fixed[2,c(1,3,5)],
-                       Gamma_shannon_ele_res_200$summary.fixed[2,c(1,3,5)],
-                       Gamma_shannon_ele_res_300$summary.fixed[2,c(1,3,5)])
-est <- c("100m resolution", "200m resolution", "300m resolution")
-Ele_df_aviris <- cbind(as.factor(est), Ele_df_aviris)
-colnames(Ele_df_aviris)[c(1,3:4)] <- c("resolution","lower", "upper")
-# Ele_df_aviris[,2:4] <- exp(Ele_df_aviris[,2:4])
-Ele_df_aviris$resolution <- factor(Ele_df_aviris$resolution, levels = c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution"))
 
-sd_ele_aviris_plot <- ggplot(data = Ele_df_aviris, 
-                              aes(x = mean, y = resolution, xmin = lower, xmax = upper)) +
-  geom_pointrange() +
-  labs(title = expression(paste("Aviris data: Model estimate of ", sigma, "(elevation) on the estimate Shannon index")),
-       x = "Coefficient Estimate",
-       y = "Resolution",
-       caption = "Models fit with INLA. Error bars show the 95% confidence interval.")+
-  geom_vline(xintercept = as.numeric(0), col="red", alpha=0.5, lty="dashed")+
-  theme_cowplot()
-sd_ele_aviris_plot
+### coefficient of model derived from Sentinel-2 data
 
-
-### sentinel data
 get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_100_sent.Rdata"))
 get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_200_sent.Rdata"))
 get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_300_sent.Rdata"))
@@ -890,27 +623,8 @@ grob <- grobTree(textGrob("pseudo-R2", x=4,  y=0.25, hjust=0.5,
                           gp=gpar(col="red", fontsize=13, fontface="italic")))
 Slope_df_sent_plot + annotation_custom(grob)
 
-# ele
-Ele_df_sent <- rbind(Gamma_shannon_ele_res_100_sent$summary.fixed[2,c(1,3,5)],
-                       Gamma_shannon_ele_res_200_sent$summary.fixed[2,c(1,3,5)],
-                       Gamma_shannon_ele_res_300_sent$summary.fixed[2,c(1,3,5)])
-est <- c("100m resolution", "200m resolution", "300m resolution")
-Ele_df_sent <- cbind(as.factor(est), Ele_df_sent)
-colnames(Ele_df_sent)[c(1,3:4)] <- c("resolution","lower", "upper")
-# Ele_df_sent[,2:4] <- exp(Ele_df_sent[,2:4])
-Ele_df_sent$resolution <- factor(Ele_df_sent$resolution, levels = c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution"))
 
-Ele_df_sent_plot <- ggplot(data = Ele_df_sent, 
-                             aes(x = mean, y = resolution, xmin = lower, xmax = upper)) +
-  geom_pointrange() +
-  labs(title = expression(paste("Sentinel-2 data: Model estimate of ", sigma, "(elevation) on the estimate Shannon index")),
-       x = "Coefficient Estimate",
-       y = "Resolution",
-       caption = "Models fit with INLA. Error bars show the 95% confidence interval.")+
-  geom_vline(xintercept = as.numeric(0), col="red", alpha=0.5, lty="dashed")+
-  theme_cowplot()
-Ele_df_sent_plot
-
+### Putting plots together
 
 sd_slope_aviris <- plot_grid(sd_slope_aviris_plot, Slope_df_sent_plot)
 x.grob <- textGrob("")
@@ -919,80 +633,27 @@ final_plot <- grid.arrange(arrangeGrob(sd_slope_aviris,bottom = x.grob, left = y
 save_plot(final_plot, filename="~/data/output/final_plot/coeff_plot_sd_slope_aviris.png", ncol=2, base_height = 4, base_width = 5)
 
 
-plot_grid(sd_ele_aviris_plot,Ele_df_sent_plot)
-
-
-#################
-# Model with coefficient of variation
-#################
-Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 10, "PC1278", sep="_"))
-Shannon_matrix <- as.matrix(Shannon, wide=T)
-Elev <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 10, "_res.tif", sep=""))
-Elev_matrix <- as.matrix(Elev, wide=T)
-Mean_ele <- Elev <- rast(paste("~/data/ArcDEM/mean_ele_masked_", 10, "_res.tif", sep=""))
-Mean_ele_matrix <- as.matrix(Mean_ele, wide=T)
-nrow= nrow(Shannon_matrix)
-ncol= ncol(Shannon_matrix)
-n = nrow*ncol
-s = inla.matrix2vector(Shannon_matrix)
-table(is.na(s))
-s[!is.na(s)] <- s[!is.na(s)]+ 1
-e <- inla.matrix2vector(Elev_matrix)
-me <- inla.matrix2vector(Mean_ele_matrix)
-table(is.na(Shannon_matrix))
-table(is.na(Elev_matrix))
-table(is.na(Mean_ele_matrix))
-node = 1:n
-data <- data.frame(Shannon_index = s, topo=e, mean_ele = me, node=node)
-data <- data[-c(which(is.na(s))),]
-data$coeff_var <- data$topo/data$mean_ele
-data <- data[-11798,] 
-hist(data$Shannon_index)
-hist(data$topo)
-hist(data$coeff_var)
-plot(data$Shannon_index~data$coeff_var)
-plot(data$Shannon_index~data$topo)
-
-formula= Shannon_index ~ 1 + coeff_var +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_coeffvar_res_100 <- inla(formula,     
-                                       family = "gamma",
-                                       data = data,
-                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-
-summary(Gamma_shannon_coeffvar_res_100)
-save(Gamma_shannon_coeffvar_res_100, file="~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_100.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_coeffvar_res_100.Rdata"))
-
-
-######
-# variogram
-######
-library(gstat)
-library(sp)
-library(raster)
-window_size <- c(20, 40, 60)
-x <- 1
-Shannon <- rast(paste("~/data/biodivmapR_Aviris/RESULTS/ang20190802t220708_rfl_rect/SPCA/ALPHA/Shannon_", window_size[x], "_PC1289", sep="")) ##have to add the name of the raster
-
-aviris_map <- rast("~/data/biodivmapR_Aviris/RESULTS/ang20190802t220708_rfl_rect/SPCA/ALPHA/Shannon_20_PC1289")
-aviris_map_raster <- raster(aviris_map)
-aviris_map_sp <- as(aviris_map_raster, "SpatialPointsDataFrame")
-vario_close <- variogram(Shannon_20_PC1289~1, data=aviris_map_sp, cutoff=5000, width=100)
-plot(vario_close)
-# vario_far <- variogram(Shannon_10~1, data=Shannon_map_sp, cutoff=30000, width=1000)
-# plot(vario_far)
-try <- vgm(0.1, "Exp", 1500, nugget=0.05)
-plot(try, cutoff=5000)
-vario_fit_close <- fit.variogram(vario_close, try, fit.kappa = TRUE)
-plot(vario_fit_close, cutoff=5000)
-plot(vario_close, vario_fit_close)
-vario_fit_close
-ggplot()+
-  geom_point(data=vario_close, aes(dist, gamma))+
-  theme_cowplot()
-
-save_plot(plot, filename = "~/data/output/final_plot/variogram_close_shannon_res100_width100_cutoff5000.png", base_height = 4)
+# ######
+# # semi-variogram analysis
+# ######
+# library(gstat)
+# library(sp)
+# library(raster)
+# aviris_map <- rast("~/data/biodivmapR_Aviris/RESULTS/ang20190802t220708_rfl_rect/SPCA/ALPHA/Shannon_20_PC1289")
+# aviris_map_raster <- raster(aviris_map)
+# aviris_map_sp <- as(aviris_map_raster, "SpatialPointsDataFrame")
+# vario_close <- variogram(Shannon_20_PC1289~1, data=aviris_map_sp, cutoff=5000, width=100)
+# plot(vario_close)
+# try <- vgm(0.1, "Exp", 1500, nugget=0.05)
+# plot(try, cutoff=5000)
+# vario_fit_close <- fit.variogram(vario_close, try, fit.kappa = TRUE)
+# plot(vario_fit_close, cutoff=5000)
+# plot(vario_close, vario_fit_close)
+# vario_fit_close
+# ggplot()+
+#   geom_point(data=vario_close, aes(dist, gamma))+
+#   theme_cowplot()
+# save_plot(plot, filename = "~/data/output/final_plot/variogram_close_shannon_res100_width100_cutoff5000.png", base_height = 4)
 
 
 
