@@ -1,0 +1,171 @@
+---
+title: "table_forming"
+author: "Marie-Lou Pijnenburg"
+date: "2023-10-07"
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+  always_allow_html: true
+---
+
+
+```{r, echo=FALSE, message=FALSE}
+get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_100.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_200.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_300.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_500.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_1000.Rdata"))
+library(dplyr)
+library(kableExtra)
+options(kableExtra.auto_format = FALSE)
+
+table_slope_res100 <- rbind(Gamma_shannon_sd_slope_res_100$summary.fixed[,c(1,3,5)],
+Gamma_shannon_sd_slope_res_100$summary.hyperpar[3,c(1,3,5)]) %>% as.data.frame()
+table_slope_res100 %>%
+  kbl(caption = "Recreating booktabs style table") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+table_slope <- rbind(Gamma_shannon_sd_slope_res_100$summary.fixed[2,c(1,3,5)],
+                     Gamma_shannon_sd_slope_res_200$summary.fixed[2,c(1,3,5)], 
+                     Gamma_shannon_sd_slope_res_300$summary.fixed[2,c(1,3,5)], 
+                     Gamma_shannon_sd_slope_res_500$summary.fixed[2,c(1,3,5)], 
+                     Gamma_shannon_sd_slope_res_1000$summary.fixed[2,c(1,3,5)]) %>% as.data.frame()
+
+res <- c("100 m", "200 m", "300 m", "500 m", "1000 m")
+rownames(table_slope) <- res
+table_slope %>% 
+  kbl %>% 
+  kable_classic(full_width=F, html_font = "Cambria")
+
+
+table_range <- rbind(Gamma_shannon_sd_slope_res_100$summary.hyperpar[3,c(1,3,5)],
+                     Gamma_shannon_sd_slope_res_200$summary.hyperpar[3,c(1,3,5)], 
+                     Gamma_shannon_sd_slope_res_300$summary.hyperpar[3,c(1,3,5)], 
+                     Gamma_shannon_sd_slope_res_500$summary.hyperpar[3,c(1,3,5)], 
+                     Gamma_shannon_sd_slope_res_1000$summary.hyperpar[3,c(1,3,5)]) %>% as.data.frame()
+
+res <- c("100 m", "200 m", "300 m", "500 m", "1000 m")
+rownames(table_range) <- res
+full_table <- cbind(table_slope, table_range)
+colnames(full_table) <- rep(c("mean", "0.025", "0.975"), 2)
+kbl(full_table, digits = 3, table.attr = "style='width:60%;'") %>%
+  # kable_styling(full_width = F) %>% 
+  kable_classic() %>%
+  add_header_above(c(" " = 1, "sd(slope)" = 3, "Range" = 3))
+
+
+full_table <- cbind(rbind(Gamma_shannon_sd_slope_res_100$summary.fixed[2,c(1,3,5)],
+                          Gamma_shannon_sd_slope_res_100$summary.hyperpar[3,c(1,3,5)]),
+                     rbind(Gamma_shannon_sd_slope_res_200$summary.fixed[2,c(1,3,5)],
+                           Gamma_shannon_sd_slope_res_200$summary.hyperpar[3,c(1,3,5)]), 
+                     rbind(Gamma_shannon_sd_slope_res_300$summary.fixed[2,c(1,3,5)],
+                           Gamma_shannon_sd_slope_res_300$summary.hyperpar[3,c(1,3,5)]),
+                     rbind(Gamma_shannon_sd_slope_res_500$summary.fixed[2,c(1,3,5)],
+                           Gamma_shannon_sd_slope_res_500$summary.hyperpar[3,c(1,3,5)]),
+                     rbind(Gamma_shannon_sd_slope_res_1000$summary.fixed[2,c(1,3,5)], 
+                           Gamma_shannon_sd_slope_res_1000$summary.hyperpar[3,c(1,3,5)])
+                    ) %>% as.data.frame()
+colnames(full_table) <- rep(c("mean", "0.025", "0.975"), 5)
+rownames(full_table) <- c("sd(slope)", "range")
+kbl(full_table, digits = 3) %>%
+  kable_classic() %>%
+  add_header_above(c(" " = 1, "100 m" = 3, "200 m" = 3, "300 m" = 3, "500 m"=3, "1000 m"=3))
+
+# table CV elevation
+get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_100.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_200.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_300.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_500.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_1000.Rdata"))
+
+table_CV <- rbind(Gamma_shannon_coeffvar_res_100$summary.fixed[2,c(1,3,5)],
+                     Gamma_shannon_coeffvar_res_200$summary.fixed[2,c(1,3,5)], 
+                     Gamma_shannon_coeffvar_res_300$summary.fixed[2,c(1,3,5)], 
+                     Gamma_shannon_coeffvar_res_500$summary.fixed[2,c(1,3,5)], 
+                     Gamma_shannon_coeffvar_res_1000$summary.fixed[2,c(1,3,5)]) %>% as.data.frame()
+
+res <- c("100 m", "200 m", "300 m", "500 m", "1000 m")
+rownames(table_CV) <- res
+table_CV %>% 
+  kbl %>% 
+  kable_classic(full_width=F, html_font = "Cambria")
+
+table_range_CV <- rbind(Gamma_shannon_coeffvar_res_100$summary.hyperpar[3,c(1,3,5)],
+                     Gamma_shannon_coeffvar_res_200$summary.hyperpar[3,c(1,3,5)], 
+                     Gamma_shannon_coeffvar_res_300$summary.hyperpar[3,c(1,3,5)], 
+                     Gamma_shannon_coeffvar_res_500$summary.hyperpar[3,c(1,3,5)], 
+                     Gamma_shannon_coeffvar_res_1000$summary.hyperpar[3,c(1,3,5)]) %>% as.data.frame()
+
+res <- c("100 m", "200 m", "300 m", "500 m", "1000 m")
+rownames(table_range_CV) <- res
+full_table_CV <- cbind(table_CV, table_range_CV)
+colnames(full_table_CV) <- rep(c("mean", "0.025", "0.975"), 2)
+kbl(full_table_CV, digits = 3, table.attr = "style='width:60%;'") %>%
+  # kable_styling(full_width = F) %>% 
+  kable_classic() %>%
+  add_header_above(c(" " = 1, "CV(elevation)" = 3, "Range" = 3))
+
+
+
+
+
+# table slope aviris
+get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_100.Rdata"))
+get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_200.Rdata"))
+get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_300.Rdata"))
+
+table_slope_aviris <- rbind(Gamma_shannon_slope_res_100$summary.fixed[2,c(1,3,5)],
+                     Gamma_shannon_slope_res_200$summary.fixed[2,c(1,3,5)], 
+                     Gamma_shannon_slope_res_300$summary.fixed[2,c(1,3,5)]) %>% as.data.frame()
+res <- c("100 m", "200 m", "300 m")
+rownames(table_slope_aviris) <- res
+table_slope_aviris %>% 
+  kbl %>% 
+  kable_classic(full_width=F, html_font = "Cambria")
+
+table_range_aviris <- rbind(Gamma_shannon_slope_res_100$summary.hyperpar[3,c(1,3,5)],
+                     Gamma_shannon_slope_res_200$summary.hyperpar[3,c(1,3,5)], 
+                     Gamma_shannon_slope_res_300$summary.hyperpar[3,c(1,3,5)]) %>% as.data.frame()
+res <- c("100 m", "200 m", "300 m")
+rownames(table_range_aviris) <- res
+full_table_aviris <- cbind(table_slope_aviris, table_range_aviris)
+colnames(full_table_aviris) <- rep(c("mean", "0.025", "0.975"), 2)
+kbl(full_table_aviris, digits = 3, table.attr = "style='width:60%;'") %>%
+  # kable_styling(full_width = F) %>% 
+  kable_classic() %>%
+  add_header_above(c(" " = 1, "sd(slope)" = 3, "Range" = 3))
+
+
+
+# table slope sentinel aviris_aoi
+get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_100_sent.Rdata"))
+get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_200_sent.Rdata"))
+get(load("~/scratch/INLA_modelling/Aviris_modelling/Gamma_shannon_slope_res_300_sent.Rdata"))
+
+table_slope_sent_aviris_aoi <- rbind(Gamma_shannon_slope_res_100_sent$summary.fixed[2,c(1,3,5)],
+                     Gamma_shannon_slope_res_200_sent$summary.fixed[2,c(1,3,5)], 
+                     Gamma_shannon_slope_res_300_sent$summary.fixed[2,c(1,3,5)]) %>% as.data.frame()
+res <- c("100 m", "200 m", "300 m")
+rownames(table_slope_sent_aviris_aoi) <- res
+table_slope_sent_aviris_aoi %>% 
+  kbl %>% 
+  kable_classic(full_width=F, html_font = "Cambria")
+
+table_range_sent_aviris_aoi <- rbind(Gamma_shannon_slope_res_100_sent$summary.hyperpar[3,c(1,3,5)],
+                     Gamma_shannon_slope_res_200_sent$summary.hyperpar[3,c(1,3,5)], 
+                     Gamma_shannon_slope_res_300_sent$summary.hyperpar[3,c(1,3,5)]) %>% as.data.frame()
+res <- c("100 m", "200 m", "300 m")
+rownames(table_range_sent_aviris_aoi) <- res
+full_table_sent_aviris_aoi <- cbind(table_slope_sent_aviris_aoi, table_range_sent_aviris_aoi)
+colnames(full_table_sent_aviris_aoi) <- rep(c("mean", "0.025", "0.975"), 2)
+kbl(full_table_sent_aviris_aoi, digits = 3, table.attr = "style='width:60%;'") %>%
+  # kable_styling(full_width = F) %>% 
+  kable_classic() %>%
+  add_header_above(c(" " = 1, "sd(slope)" = 3, "Range" = 3))
+
+
+
+```
+
