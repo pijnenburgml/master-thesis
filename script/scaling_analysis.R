@@ -5,7 +5,6 @@ library(dplyr)
 library(tidyterra)
 library(remotes)
 library(dissUtils)
-library(biodivMapR)
 library(ggplot2)
 library(cowplot)
 
@@ -21,7 +20,8 @@ library(scales)
 # Scaling analysis 
 #################
 
-################################################################################
+# Get Shannon index data at different scale
+
 Datadir <- "~/data/biodivmapR_sent"
 NameRaster <- "sent_crop_envi_BIL"
 # Define path for image file to be processed
@@ -33,9 +33,6 @@ Input_Mask_File <- file.path(Datadir, NameMask)
 # Define path for master output directory where files produced during the process are saved
 Output_Dir <- '~/data/biodivmapR_sent/RESULTS_cluster_20'
 # dir.create(path = Output_Dir,recursive = T,showWarnings = F)
-# NDVI_Thresh <- 0.8
-# Blue_Thresh <- 500
-# NIR_Thresh <- 1500
 # Apply normalization with continuum removal?
 Continuum_Removal <- F
 # Type of dimensionality reduction
@@ -44,23 +41,10 @@ TypePCA <- 'SPCA'
 # Slower process
 # Automatically set to FALSE if TypePCA     = 'MNF'
 FilterPCA <- F
-# window size forcomputation of spectral diversity
-# window_size <-10
-# # computational parameters
 nbCPU <- 2
 MaxRAM <- 12
 # number of clusters (spectral species)
 nbclusters <- 20
-
-
-################################################################################
-##                Perform alpha and beta diversity mapping                    ##
-## https://jbferet.github.io/biodivMapR/articles/biodivMapR_6.html            ##
-################################################################################
-
-# To have the name of the PCs selected to map the alpha diversity in the filename 
-# run the function saved in the document map_alpha_div_PC_naming.R to have it in the 
-# global environment
 
 #PCA output
 PCA_Output <- get(load("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/PCA/PCA_Output.RData"))
@@ -83,10 +67,8 @@ for (x in 1:length(window_size)){
 }
 
 # result in maps of resolution 100m, 200m, 300m, 500m, 1000m. 
-
-#######
 # assessment
-#######
+
 viridis_colors <- viridis::plasma(20)
 for(x in 1:length(window_size)){
   path <- paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon_", window_size[x],"_PC1278", sep="")
@@ -95,9 +77,9 @@ for(x in 1:length(window_size)){
     
 }
 
-#####
-# prepare elevation data
-#####
+
+# prepare elevation data at different scale
+
 tile_DEM_proj <- rast("~/data/ArcDEM/tile_DEM_proj.tif")
 area_interest <- st_read("~/data/areas_of_interest.gpkg")
 area_interest_proj <- st_transform(area_interest,32613)
@@ -112,33 +94,20 @@ fact <- window_size*10/2
 for(x in 1:length(fact)){
   # browser()
   Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", window_size[x], "PC1278", sep="_"))
-  temp_rast <- rast(ext(Shannon), resolution = 10)
+  temp_rast <- rast(ext(Shannon), resolution = 2)
   tile_DEM_crop_resample <- resample(tile_DEM_crop, temp_rast, method = "bilinear")
   tile_DEM_crop_resample_noNA <- subst(tile_DEM_crop_resample, NA, -33) #have to adjust
   tile_DEM_crop_aggregated <- aggregate(tile_DEM_crop_resample_noNA, fact=window_size[x], fun="sd")
   tile_DEM_masked <- mask(tile_DEM_crop_aggregated, Shannon)
-  writeRaster(tile_DEM_masked, filename = paste("~/data/ArcDEM/sd_ele_agg10_", window_size[x], "_res.tif", sep=""))
-  # Arc_DEM_poly <- as.polygons(tile_DEM_masked, round=F, aggregate=F, extent=F, na.rm=F)
-  # Sentinel_shannon_poly <- as.polygons(Shannon, round=F, aggregate=F, extent=F,na.rm=F)
-  # writeVector(Sentinel_shannon_poly,filename=paste("~/data/output/INLA_modelling/Sentinel_shannon_poly", "res", window_size[x], "with_NA", sep="_"))
-  # writeVector(Arc_DEM_poly, filename = paste("~/data/output/INLA_modelling/Arc_DEM_poly","res",window_size[x], "with_NA", sep="_"))
+  writeRaster(tile_DEM_masked, filename = paste("~/data/ArcDEM/ArcDEM_masked_", window_size[x], "_res.tif", sep=""))
 }
 
-# x <- 1 #to be change!
-# path_sent <- paste("~/data/output/INLA_modelling/Sentinel_shannon_poly_res_", window_size[x],"_with_NA", "/Sentinel_shannon_poly_res_", window_size[x], "_with_NA.shp", sep="")
-# path_arcdem <- paste("~/data/output/INLA_modelling/Arc_DEM_poly_res_", window_size[x], "_with_NA", "/Arc_DEM_poly_res_", window_size[x], "_with_NA.shp", sep="")
-# Sentinel_shannon_vect <- vect(path_sent)
-# Arc_DEM_vect <- vect(path_arcdem)
-# sd_topo <- Arc_DEM_vect$X29_21_1_1
-# Sentinel_shannon_vect$sd_topo <- sd_topo
-# writeVector(Sentinel_shannon_vect, filename = paste("~/data/output/INLA_modelling/model_object_res_", window_size[x], "_with_NA.shp", sep=""), overwrite=T)
 
 #################
 # Modelling sd(elevation)
 #################
 
 # resolution 100m x 100m
-
 # Sentinel_lattice <-readOGR("~/data/output/INLA_modelling/model_object_res_10_with_NA.shp")
 # Sentinel_data <- Sentinel_lattice@data
 # Sentinel_data$Shannon_10[!is.na(Sentinel_data$Shannon_10)] <- Sentinel_data$Shannon_10[!is.na(Sentinel_data$Shannon_10)]+ 1
@@ -175,17 +144,18 @@ data <- data[-c(which(is.na(s))),]
 # hyper = list(range = list(param =c(1, 1),prior = "loggamma",initial=1),
 #              prec = list(param=c(1, 1)))
 
-# formula= Shannon_index ~ 1+ log(topo)+
-#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
-# 
-# Gaussian_loglink_shannon_topo <- inla(formula,family = "gaussian",
-#                           control.family=list(link='identity'),
-#                           data = data,
-#                           control.compute = list(cpo = T, dic = T, waic = T, return.marginals.predictor=TRUE), verbose=TRUE)
-# 
-# summary(Gaussian_loglink_shannon_topo)
-# # save(Gaussian_loglink, file="~/data/output/INLA_modelling/Gaussian_model_loglink_shannon_log_topo.Rdata")
-# Gaussian_loglink <- get(load("~/data/output/INLA_modelling/Gaussian_model_loglink_shannon_log_topo.Rdata"))
+formula= Shannon_index ~ 1+ log(topo)+
+  f(node, model="matern2d", nrow=nrow, ncol=ncol)
+
+Gaussian_shannon_log_topo <- inla(formula,family = "gaussian",
+                                  control.family=list(link='identity'),
+                                  data = data,
+                                  control.compute = list(cpo = T, dic = T, waic = T, return.marginals.predictor=TRUE, config=T), verbose=TRUE)
+summary(Gaussian_shannon_log_topo)
+save(Gaussian_shannon_log_topo, file="~/scratch/INLA_modelling/Gaussian_shannon_log_topo.Rdata")
+# Gaussian_loglink <- get(load("~/scratch/INLA_modelling/Gaussian_model_loglink_shannon_log_topo.Rdata"))
+observed=data$Shannon_index
+plot_inla_residuals(Gaussian_shannon_log_topo, observed = observed)
 # 
 # 
 # plot_inla_residuals(Gaussian_loglink_withNA, observed=data$Shannon_index)
@@ -223,7 +193,10 @@ summary(Gamma_shannon_topo)
 
 Gamma_shannon_topo_res100 <- Gamma_shannon_topo
 save(Gamma_shannon_topo_res100, file="~/data/output/INLA_modelling/Gamma_shannon_topo_res100.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_topo_res100.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_topo_res100.Rdata"))
+
+observed <- data$Shannon_index
+plot_inla_residuals_ML(Gamma_shannon_topo_res100, observed=observed)
 
 #################
 # resolution 200mx200m
@@ -256,7 +229,10 @@ Gamma_shannon_topo_res200 <- inla(formula,
 summary(Gamma_shannon_topo_res200)
 
 save(Gamma_shannon_topo_res200, file="~/data/output/INLA_modelling/Gamma_shannon_topo_res200.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_topo_res200.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_topo_res200.Rdata"))
+
+observed <- log(data$Shannon_index) 
+plot_inla_residuals(Gamma_shannon_topo_res200, observed=observed)
 
 ###############
 # resolution 300m x 300m
@@ -288,8 +264,11 @@ Gamma_shannon_topo_res300 <- inla(formula,
 
 summary(Gamma_shannon_topo_res300)
 
-save(Gamma_shannon_topo_res300, file="~/data/output/INLA_modelling/Gamma_shannon_topo_res300.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_topo_res300.Rdata"))
+save(Gamma_shannon_topo_res300, file="~/scratch/INLA_modelling/Gamma_shannon_topo_res300.Rdata")
+get(load("~/scratch/INLA_modelling/Gamma_shannon_topo_res300.Rdata"))
+
+observed <- log(data$Shannon_index) 
+plot_inla_residuals(Gamma_shannon_topo_res300, observed=observed)
 
 ################
 # resolution 500m x 500m
@@ -322,7 +301,7 @@ Gamma_shannon_topo_res500 <- inla(formula,
 summary(Gamma_shannon_topo_res500)
 
 save(Gamma_shannon_topo_res500, file="~/data/output/INLA_modelling/Gamma_shannon_topo_res500.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_topo_res500.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_topo_res500.Rdata"))
 
 
 ##############
@@ -375,7 +354,7 @@ sd_topo_res_1000_plot <- Gamma_shannon_topo_res_10000_df %>%
 sd_topo_res_1000_plot 
 
 save(Gamma_shannon_topo_res1000, file="~/data/output/INLA_modelling/Gamma_shannon_topo_res1000.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_topo_res1000.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_topo_res1000.Rdata"))
 
 #################
 # plotting
@@ -1283,13 +1262,43 @@ data <- data[-c(which(is.na(s))),]
 
 formula= Shannon_index ~ 1 + slope +
   f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_slope_res_100 <- inla(formula,     
+Gamma_shannon_slope_res_100 <- inla(formula,
                                       family = "gamma",
                                       data = data,
                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
 summary(Gamma_shannon_slope_res_100)
-save(Gamma_shannon_slope_res_100, file="~/data/output/INLA_modelling/Gamma_shannon_slope_res_100.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_ele_slope_res_100.Rdata"))
+save(Gamma_shannon_slope_res_100, file="~/scratch/INLA_modelling/Gamma_shannon_mean_slope_res_100.Rdata")
+get(load("~/scratch/INLA_modelling/Gamma_shannon_mean_slope_res_100.Rdata"))
+
+observed <- data$Shannon_index
+fit <- Gamma_shannon_sd_slope_res_100$summary.fitted.values$mean[1:length(observed)]
+pseudo_r2=function(observed,fit){
+  res =  observed-fit
+  RRes=sum((res)^2,na.rm = T)
+  RRtot=sum((observed-mean(fit,na.rm=T))^2,na.rm = T)
+  pseudo_r2_val=1-RRes/RRtot
+  print(RRes)
+  print(RRtot)
+  return(pseudo_r2_val)  
+}
+pr <- round(pseudo_r2(observed, fit), digits = 3)
+qq100 <- ggplot()+  
+  geom_abline(slope=1, intercept=0, col="grey")+
+  geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
+  ylab("")+
+  xlab("")+
+  # coord_cartesian(xlim = c(1, 3.5))+
+  scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
+  scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
+        panel.grid.major.y = element_blank(),panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.margin=margin(t = 1, r = 4, b = 1, l = 1, unit = "pt"), 
+        panel.background = element_rect(fill=NA),
+        text = element_text(size=20))+
+  draw_text(text=paste("pseudo-R2 =", pr), x=1.7, y=3, size=20)
+qq100
+
+-sum(log(Gamma_shannon_sd_slope_res_100$cpo$cpo))
 
 # 200m
 Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 20, "PC1278", sep="_"))
@@ -1311,13 +1320,43 @@ data <- data[-c(which(is.na(s))),]
 
 formula= Shannon_index ~ 1 + slope +
   f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_slope_res_200 <- inla(formula,     
+Gamma_shannon_slope_res_200 <- inla(formula,
                                     family = "gamma",
                                     data = data,
                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
 summary(Gamma_shannon_slope_res_200)
-save(Gamma_shannon_slope_res_200, file="~/data/output/INLA_modelling/Gamma_shannon_slope_res_200.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_ele_slope_res_200.Rdata"))
+save(Gamma_shannon_slope_res_200, file="~/data/output/INLA_modelling/Gamma_shannon_mean_slope_res_200.Rdata")
+get(load("~/scratch/INLA_modelling/Gamma_shannon_mean_slope_res_200.Rdata"))
+
+observed <- data$Shannon_index
+fit <- Gamma_shannon_slope_res_200$summary.fitted.values$mean[1:length(observed)]
+# plot_inla_residuals(Gamma_shannon_slope_res_200, observed=observed)
+pseudo_r2=function(observed,fit){
+  res =  observed-fit
+  RRes=sum((res)^2,na.rm = T)
+  RRtot=sum((observed-mean(fit,na.rm=T))^2,na.rm = T)
+  pseudo_r2_val=1-RRes/RRtot
+  print(RRes)
+  print(RRtot)
+  return(pseudo_r2_val)  
+}
+pr <- round(pseudo_r2(observed, fit), digits = 3)
+qq200 <- ggplot()+  
+  geom_abline(slope=1, intercept=0, col="grey")+
+  geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
+  ylab("")+
+  xlab("")+
+  # coord_cartesian(xlim = c(1, 3.5))+
+  scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
+  scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
+        panel.grid.major.y = element_blank(),panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.margin=margin(t = 1, r = 4, b = 1, l = 1, unit = "pt"), 
+        panel.background = element_rect(fill=NA),
+        text = element_text(size=20))+
+  draw_text(text=paste("pseudo-R2 =", pr), x=1.7, y=3, size=20)
+qq200
+-sum(log(Gamma_shannon_slope_res_200$cpo$cpo))
 
 # 300m
 Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 30, "PC1278", sep="_"))
@@ -1339,14 +1378,44 @@ data <- data[-c(which(is.na(s))),]
 
 formula= Shannon_index ~ 1 + slope +
   f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_slope_res_300 <- inla(formula,     
+Gamma_shannon_slope_res_300 <- inla(formula,
                                     family = "gamma",
                                     data = data,
                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
 summary(Gamma_shannon_slope_res_300)
-save(Gamma_shannon_slope_res_300, file="~/data/output/INLA_modelling/Gamma_shannon_slope_res_300.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_slope_res_300.Rdata"))
+save(Gamma_shannon_slope_res_300, file="~/data/output/INLA_modelling/Gamma_shannon_mean_slope_res_300.Rdata")
+get(load("~/scratch/INLA_modelling/Gamma_shannon_mean_slope_res_300.Rdata"))
 
+observed <- data$Shannon_index
+fit <- Gamma_shannon_slope_res_300$summary.fitted.values$mean[1:length(observed)]
+# plot_inla_residuals(Gamma_shannon_slope_res_200, observed=observed)
+pseudo_r2=function(observed,fit){
+  res =  observed-fit
+  RRes=sum((res)^2,na.rm = T)
+  RRtot=sum((observed-mean(fit,na.rm=T))^2,na.rm = T)
+  pseudo_r2_val=1-RRes/RRtot
+  print(RRes)
+  print(RRtot)
+  return(pseudo_r2_val)  
+}
+pr <- round(pseudo_r2(observed, fit), digits = 3)
+qq300 <- ggplot()+  
+  geom_abline(slope=1, intercept=0, col="grey")+
+  geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
+  ylab("")+
+  xlab("")+
+  # coord_cartesian(xlim = c(1, 3.5))+
+  scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
+  scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
+        panel.grid.major.y = element_blank(),panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.margin=margin(t = 1, r = 4, b = 1, l = 1, unit = "pt"), 
+        panel.background = element_rect(fill=NA),
+        text = element_text(size=20))+
+  draw_text(text=paste("pseudo-R2 =", pr), x=1.7, y=3, size=20)
+qq300
+
+-sum(log(Gamma_shannon_slope_res_300$cpo$cpo))
 
 # 500
 Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 50, "PC1278", sep="_"))
@@ -1368,13 +1437,43 @@ data <- data[-c(which(is.na(s))),]
 
 formula= Shannon_index ~ 1 + slope +
   f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_slope_res_500 <- inla(formula,     
+Gamma_shannon_slope_res_500 <- inla(formula,
                                     family = "gamma",
                                     data = data,
                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
 summary(Gamma_shannon_slope_res_500)
-save(Gamma_shannon_slope_res_500, file="~/data/output/INLA_modelling/Gamma_shannon_slope_res_500.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_slope_res_500.Rdata"))
+save(Gamma_shannon_slope_res_500, file="~/data/output/INLA_modelling/Gamma_shannon_mean_slope_res_500.Rdata")
+get(load("~/scratch/INLA_modelling/Gamma_shannon_mean_slope_res_500.Rdata"))
+
+observed <- data$Shannon_index
+fit <- Gamma_shannon_slope_res_500$summary.fitted.values$mean[1:length(observed)]
+pseudo_r2=function(observed,fit){
+  res =  observed-fit
+  RRes=sum((res)^2,na.rm = T)
+  RRtot=sum((observed-mean(fit,na.rm=T))^2,na.rm = T)
+  pseudo_r2_val=1-RRes/RRtot
+  print(RRes)
+  print(RRtot)
+  return(pseudo_r2_val)  
+}
+pr <- round(pseudo_r2(observed, fit), digits = 3)
+qq500 <- ggplot()+  
+  geom_abline(slope=1, intercept=0, col="grey")+
+  geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
+  ylab("")+
+  xlab("")+
+  # coord_cartesian(xlim = c(1, 3.5))+
+  scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
+  scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
+        panel.grid.major.y = element_blank(),panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.margin=margin(t = 1, r = 4, b = 1, l = 1, unit = "pt"), 
+        panel.background = element_rect(fill=NA),
+        text = element_text(size=20))+
+  draw_text(text=paste("pseudo-R2 =", pr), x=1.7, y=3, size=20)
+qq500
+
+-sum(log(Gamma_shannon_slope_res_500$cpo$cpo))
 
 
 # 1000m
@@ -1397,13 +1496,56 @@ data <- data[-c(which(is.na(s))),]
 
 formula= Shannon_index ~ 1 + slope +
   f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_slope_res_1000 <- inla(formula,     
+Gamma_shannon_slope_res_1000 <- inla(formula,
                                     family = "gamma",
                                     data = data,
                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
 summary(Gamma_shannon_slope_res_1000)
-save(Gamma_shannon_slope_res_1000, file="~/data/output/INLA_modelling/Gamma_shannon_slope_res_1000.Rdata")
-get(load("~/data/output/INLA_modelling/Gamma_shannon_slope_res_1000.Rdata"))
+save(Gamma_shannon_slope_res_1000, file="~/data/output/INLA_modelling/Gamma_shannon_mean_slope_res_1000.Rdata")
+get(load("~/scratch/INLA_modelling/Gamma_shannon_mean_slope_res_1000.Rdata"))
+
+observed <- data$Shannon_index
+fit <- Gamma_shannon_slope_res_1000$summary.fitted.values$mean[1:length(observed)]
+pseudo_r2=function(observed,fit){
+  res =  observed-fit
+  RRes=sum((res)^2,na.rm = T)
+  RRtot=sum((observed-mean(fit,na.rm=T))^2,na.rm = T)
+  pseudo_r2_val=1-RRes/RRtot
+  print(RRes)
+  print(RRtot)
+  return(pseudo_r2_val)  
+}
+pr <- round(pseudo_r2(observed, fit), digits = 3)
+qq1000 <- ggplot()+  
+  geom_abline(slope=1, intercept=0, col="grey")+
+  geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
+  ylab("")+
+  xlab("")+
+  # coord_cartesian(xlim = c(1, 3.5))+
+  scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.6))+
+  scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
+        panel.grid.major.y = element_blank(),panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.margin=margin(t = 1, r = 4, b = 1, l = 1, unit = "pt"), 
+        panel.background = element_rect(fill=NA),
+        # axis.title.x = element_text(size = 20)
+        text = element_text(size=20))+
+  draw_text(text=paste("pseudo-R2 =", pr), x=1.7, y=3, size=20)
+qq1000
+
+-sum(log(Gamma_shannon_slope_res_1000$cpo$cpo))
+
+qqplot_sd_slope_together <- plot_grid(qq100, qq200, qq300, qq500, qq1000, align = "v", ncol=1, axis = "r", labels="AUTO")
+qqplot_sd_slope_together
+save_plot(qqplot_sd_slope_together, filename = "~/data/output/final_plot/qqplot_sd_slope_together.png", base_height = 25, base_width = 10,bg="white")
+
+library(grid)
+library(gridExtra)
+x.grob <- textGrob(paste("Fitted Shannon index from model with", "standard deviation of topographic slope as predictor", sep="\n"), gp=gpar(fontsize=25))
+y.grob <- textGrob("Observe Shannon index", rot=90, gp=gpar(fontsize=25)) 
+qqplot_sd_slope_together_final <- grid.arrange(arrangeGrob(qqplot_sd_slope_together,bottom = x.grob, left = y.grob))
+qqplot_sd_slope_together_final
+save_plot(qqplot_sd_slope_together_final, filename = "~/data/output/final_plot/qqplot_sd_slope_together_final.png", base_height = 25, base_width = 10,bg="white")
 
 # plotting
 
@@ -1429,6 +1571,7 @@ mean_slope_plot_trans <- ggplot(data = Slope_df,
   geom_vline(xintercept = as.numeric(1), linetype='longdash', col="red", alpha=0.5)+
   theme_bw()
   
+
 
 #################
 # Model with coefficient of variation
@@ -1457,19 +1600,46 @@ data$coeff_var <- data$topo/data$mean_ele
 # data <- data[-11798,] 
 plot(data$Shannon_index~data$coeff_var)
 
-formula= Shannon_index ~ 1 + coeff_var +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_coeffvar_res_100 <- inla(formula,     
-                                     family = "gamma",
-                                     data = data,
-                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-
-summary(Gamma_shannon_coeffvar_res_100)
-save(Gamma_shannon_coeffvar_res_100, file="~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_100.Rdata")
+# formula= Shannon_index ~ 1 + coeff_var +
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# Gamma_shannon_coeffvar_res_100 <- inla(formula,     
+#                                      family = "gamma",
+#                                      data = data,
+#                                      control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE, config=T), verbose=TRUE)
+# 
+# summary(Gamma_shannon_coeffvar_res_100)
+# save(Gamma_shannon_coeffvar_res_100, file="~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_100.Rdata")
 get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_100.Rdata"))
+# coeff_var_glm_100 <- glm(Shannon_index ~ coeff_var, family = Gamma(link = "identity"), data = data)
 
-
-coeff_var_glm_100 <- glm(Shannon_index ~ coeff_var, family = Gamma(link = "identity"), data = data)
+observed <- data$Shannon_index
+fit <- Gamma_shannon_coeffvar_res_100$summary.fitted.values$mean[1:length(observed)]
+pseudo_r2=function(observed,fit){
+  res =  observed-fit
+  RRes=sum((res)^2,na.rm = T)
+  RRtot=sum((observed-mean(fit,na.rm=T))^2,na.rm = T)
+  pseudo_r2_val=1-RRes/RRtot
+  print(RRes)
+  print(RRtot)
+  return(pseudo_r2_val)  
+}
+pr <- round(pseudo_r2(observed, fit), digits = 3)
+qq100 <- ggplot()+  
+  geom_abline(slope=1, intercept=0, col="grey")+
+  geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
+  ylab("")+
+  xlab("")+
+  # coord_cartesian(xlim = c(1, 3.5))+
+  scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
+  scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
+        panel.grid.major.y = element_blank(),panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.margin=margin(t = 1, r = 4, b = 1, l = 1, unit = "pt"), 
+        panel.background = element_rect(fill=NA),
+        text = element_text(size=20))+
+  draw_text(text=paste("pseudo-R2 =", pr), x=1.7, y=3, size=20)
+qq100
+-sum(log(Gamma_shannon_coeffvar_res_100$cpo$cpo))
 
 
 # formula= Shannon_index ~ 1 + mean_ele +
@@ -1506,16 +1676,45 @@ data <- data.frame(Shannon_index = s, topo=e, mean_ele = me, node=node)
 data <- data[-c(which(is.na(s))),]
 data$coeff_var <- data$topo/data$mean_ele
 
-formula= Shannon_index ~ 1 + coeff_var +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_coeffvar_res_200 <- inla(formula,     
-                                       family = "gamma",
-                                       data = data,
-                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-
-summary(Gamma_shannon_coeffvar_res_200)
-save(Gamma_shannon_coeffvar_res_200, file="~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_200.Rdata")
+# formula= Shannon_index ~ 1 + coeff_var +
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# Gamma_shannon_coeffvar_res_200 <- inla(formula,     
+#                                        family = "gamma",
+#                                        data = data,
+#                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE, config=T), verbose=TRUE)
+# 
+# summary(Gamma_shannon_coeffvar_res_200)
+# save(Gamma_shannon_coeffvar_res_200, file="~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_200.Rdata")
 get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_200.Rdata"))
+
+observed <- data$Shannon_index
+fit <- Gamma_shannon_coeffvar_res_200$summary.fitted.values$mean[1:length(observed)]
+pseudo_r2=function(observed,fit){
+  res =  observed-fit
+  RRes=sum((res)^2,na.rm = T)
+  RRtot=sum((observed-mean(fit,na.rm=T))^2,na.rm = T)
+  pseudo_r2_val=1-RRes/RRtot
+  print(RRes)
+  print(RRtot)
+  return(pseudo_r2_val)  
+}
+pr <- round(pseudo_r2(observed, fit), digits = 3)
+qq200 <- ggplot()+  
+  geom_abline(slope=1, intercept=0, col="grey")+
+  geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
+  ylab("")+
+  xlab("")+
+  # coord_cartesian(xlim = c(1, 3.5))+
+  scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
+  scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
+        panel.grid.major.y = element_blank(),panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.margin=margin(t = 1, r = 4, b = 1, l = 1, unit = "pt"), 
+        panel.background = element_rect(fill=NA),
+        text = element_text(size=20))+
+  draw_text(text=paste("pseudo-R2 =", pr), x=1.7, y=3, size=20)
+qq200
+-sum(log(Gamma_shannon_coeffvar_res_200$cpo$cpo))
 
 # 
 # formula= Shannon_index ~ 1 + mean_ele +
@@ -1553,14 +1752,43 @@ data$coeff_var <- data$topo/data$mean_ele
 
 formula= Shannon_index ~ 1 + coeff_var +
   f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_coeffvar_res_300 <- inla(formula,     
+Gamma_shannon_coeffvar_res_300 <- inla(formula,
                                        family = "gamma",
                                        data = data,
-                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE, config=T), verbose=TRUE)
 
-summary(Gamma_shannon_coeffvar_res_300)
-save(Gamma_shannon_coeffvar_res_300, file="~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_300.Rdata")
+# summary(Gamma_shannon_coeffvar_res_300)
+# save(Gamma_shannon_coeffvar_res_300, file="~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_300.Rdata")
 get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_300.Rdata"))
+
+observed <- data$Shannon_index
+fit <- Gamma_shannon_coeffvar_res_300$summary.fitted.values$mean[1:length(observed)]
+pseudo_r2=function(observed,fit){
+  res =  observed-fit
+  RRes=sum((res)^2,na.rm = T)
+  RRtot=sum((observed-mean(fit,na.rm=T))^2,na.rm = T)
+  pseudo_r2_val=1-RRes/RRtot
+  print(RRes)
+  print(RRtot)
+  return(pseudo_r2_val)  
+}
+pr <- round(pseudo_r2(observed, fit), digits = 3)
+qq300 <- ggplot()+  
+  geom_abline(slope=1, intercept=0, col="grey")+
+  geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
+  ylab("")+
+  xlab("")+
+  # coord_cartesian(xlim = c(1, 3.5))+
+  scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
+  scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
+        panel.grid.major.y = element_blank(),panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.margin=margin(t = 1, r = 4, b = 1, l = 1, unit = "pt"), 
+        panel.background = element_rect(fill=NA),
+        text = element_text(size=20))+
+  draw_text(text=paste("pseudo-R2 =", pr), x=1.7, y=3, size=20)
+qq300
+-sum(log(Gamma_shannon_coeffvar_res_300$cpo$cpo))
 
 # 
 # formula= Shannon_index ~ 1 + mean_ele +
@@ -1596,17 +1824,45 @@ data <- data.frame(Shannon_index = s, topo=e, mean_ele = me, node=node)
 data <- data[-c(which(is.na(s))),]
 data$coeff_var <- data$topo/data$mean_ele
 
-formula= Shannon_index ~ 1 + coeff_var +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_coeffvar_res_500 <- inla(formula,     
-                                       family = "gamma",
-                                       data = data,
-                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-
-summary(Gamma_shannon_coeffvar_res_500)
-save(Gamma_shannon_coeffvar_res_500, file="~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_500.Rdata")
+# formula= Shannon_index ~ 1 + coeff_var +
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# Gamma_shannon_coeffvar_res_500 <- inla(formula,     
+#                                        family = "gamma",
+#                                        data = data,
+#                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE, config=T), verbose=TRUE)
+# 
+# summary(Gamma_shannon_coeffvar_res_500)
+# save(Gamma_shannon_coeffvar_res_500, file="~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_500.Rdata")
 get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_500.Rdata"))
 
+observed <- data$Shannon_index
+fit <- Gamma_shannon_coeffvar_res_500$summary.fitted.values$mean[1:length(observed)]
+pseudo_r2=function(observed,fit){
+  res =  observed-fit
+  RRes=sum((res)^2,na.rm = T)
+  RRtot=sum((observed-mean(fit,na.rm=T))^2,na.rm = T)
+  pseudo_r2_val=1-RRes/RRtot
+  print(RRes)
+  print(RRtot)
+  return(pseudo_r2_val)  
+}
+pr <- round(pseudo_r2(observed, fit), digits = 3)
+qq500 <- ggplot()+  
+  geom_abline(slope=1, intercept=0, col="grey")+
+  geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
+  ylab("")+
+  xlab("")+
+  # coord_cartesian(xlim = c(1, 3.5))+
+  scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
+  scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
+        panel.grid.major.y = element_blank(),panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.margin=margin(t = 1, r = 4, b = 1, l = 1, unit = "pt"), 
+        panel.background = element_rect(fill=NA),
+        text = element_text(size=20))+
+  draw_text(text=paste("pseudo-R2 =", pr), x=1.7, y=3, size=20)
+qq500
+-sum(log(Gamma_shannon_coeffvar_res_500$cpo$cpo))
 
 # formula= Shannon_index ~ 1 + mean_ele +
 #   f(node, model="matern2d", nrow=nrow, ncol=ncol)
@@ -1643,14 +1899,44 @@ data$coeff_var <- data$topo/data$mean_ele
 
 formula= Shannon_index ~ 1 + coeff_var +
   f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_coeffvar_res_1000 <- inla(formula,     
+Gamma_shannon_coeffvar_res_1000 <- inla(formula,
                                        family = "gamma",
                                        data = data,
-                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE, config=T), verbose=TRUE)
 
-summary(Gamma_shannon_coeffvar_res_1000)
-save(Gamma_shannon_coeffvar_res_1000, file="~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_1000.Rdata")
+# summary(Gamma_shannon_coeffvar_res_1000)
+# save(Gamma_shannon_coeffvar_res_1000, file="~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_1000.Rdata")
 get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_1000.Rdata"))
+
+observed <- data$Shannon_index
+fit <- Gamma_shannon_coeffvar_res_1000$summary.fitted.values$mean[1:length(observed)]
+pseudo_r2=function(observed,fit){
+  res =  observed-fit
+  RRes=sum((res)^2,na.rm = T)
+  RRtot=sum((observed-mean(fit,na.rm=T))^2,na.rm = T)
+  pseudo_r2_val=1-RRes/RRtot
+  print(RRes)
+  print(RRtot)
+  return(pseudo_r2_val)  
+}
+pr <- round(pseudo_r2(observed, fit), digits = 3)
+qq1000 <- ggplot()+  
+  geom_abline(slope=1, intercept=0, col="grey")+
+  geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
+  ylab("")+
+  xlab("")+
+  # coord_cartesian(xlim = c(1, 3.5))+
+  scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
+  scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
+        panel.grid.major.y = element_blank(),panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.margin=margin(t = 1, r = 4, b = 1, l = 1, unit = "pt"), 
+        panel.background = element_rect(fill=NA),
+        text = element_text(size=20))+
+  draw_text(text=paste("pseudo-R2 =", pr), x=1.7, y=3, size=20)
+qq1000
+-sum(log(Gamma_shannon_coeffvar_res_1000$cpo$cpo))
+
 
 # formula= Shannon_index ~ 1 + mean_ele +
 #   f(node, model="matern2d", nrow=nrow, ncol=ncol)
@@ -1661,8 +1947,19 @@ get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_1000.Rdata"))
 # save(Gamma_shannon_mean_ele_res_1000, file="~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_1000.Rdata")
 # get(load("~/data/output/INLA_modelling/Gamma_shannon_mean_ele_res_1000.Rdata"))
 
-# plotting CV results
+qqplot_CV_ele_together <- plot_grid(qq100, qq200, qq300, qq500, qq1000, align = "v", ncol=1, axis = "r", labels="AUTO", label_size = 25)
+qqplot_CV_ele_together
+save_plot(qqplot_CV_ele_together, filename = "~/data/output/final_plot/qqplot_CV_ele_together.png", base_height = 25, base_width = 10,bg="white")
 
+library(grid)
+library(gridExtra)
+x.grob <- textGrob(paste("Fitted Shannon index from model with", "coefficient of variation of elevation as predictor", sep="\n"), gp=gpar(fontsize=25), vjust=0.2)
+y.grob <- textGrob("Observe Shannon index", rot=90, gp=gpar(fontsize=25)) 
+qqplot_CV_ele_together_final <- grid.arrange(arrangeGrob(qqplot_CV_ele_together,bottom = x.grob, left = y.grob))
+qqplot_CV_ele_together_final
+save_plot(qqplot_CV_ele_together_final, filename = "~/data/output/final_plot/qqplot_CV_ele_together_final.png", base_height = 25, base_width = 10,bg="white")
+
+# plotting CV results
 CV_df <- rbind(Gamma_shannon_coeffvar_res_100$summary.fixed[2,c(1,3,5)],
                Gamma_shannon_coeffvar_res_200$summary.fixed[2,c(1,3,5)],
                Gamma_shannon_coeffvar_res_300$summary.fixed[2,c(1,3,5)],
@@ -1690,6 +1987,17 @@ CV_coeff_plot <- ggplot(data = CV_df,
         panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
 CV_coeff_plot
 
+
+plot(data$topo~data$mean_ele)
+mean_ele_sd_ele <- ggplot(data, aes(x=mean_ele, y=topo))+
+  geom_point(shape=21)+
+  theme_cowplot()+
+  labs(x="Mean elevation", y=expression(paste(sigma, " (elevation)")))+
+  theme(axis.line=element_line(linewidth =0.5), axis.text.y = element_text(size=12), axis.text.x = element_text(size=12), axis.title.x = element_text(size=14), 
+        axis.title.y=element_text(size=14), panel.border = element_rect(colour = "black", fill=NA, linewidth=0.5))
+mean_ele_sd_ele
+
+save_plot(mean_ele_sd_ele, filename = "~/data/output/final_plot/scatterplot_mean_ele_sd_ele.png", bg="white", base_height = 4, base_asp = 1.4)
 
 #######
 # link topography and sd(slope)
@@ -1742,51 +2050,88 @@ data <- data.frame(Shannon_index = s, slope = sl, mean_sl = msl, node=node)
 data <- data[-c(which(is.na(s))),]
 data$slope_CV <- data$slope/data$mean_sl
 
-formula= Shannon_index ~ 1 + slope +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_sd_slope_res_100 <- inla(formula,     
-                                    family = "gamma",
-                                    data = data,
-                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-summary(Gamma_shannon_sd_slope_res_100)
-save(Gamma_shannon_sd_slope_res_100, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_100.Rdata")
+# formula= Shannon_index ~ 1 + slope +
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# Gamma_shannon_sd_slope_res_100 <- inla(formula,     
+#                                     family = "gamma",
+#                                     data = data,
+#                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE, config=T), 
+#                                     control.predictor=list(compute=T, link=1), 
+#                                     verbose=TRUE)
+# summary(Gamma_shannon_sd_slope_res_100)
+# save(Gamma_shannon_sd_slope_res_100, file="~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_100.Rdata")
 get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_100.Rdata"))
 
-# glm plotting
-res_100_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
-summary(res_100_glm)
-(res_100_plot <- ggplot(
-  data,
-  aes(x = slope, y = Shannon_index)) +
-    geom_point(shape=21) +
-    scale_y_continuous(limits = c(1, 4)) +
-    labs(x = "sd(slope)", y="Shannon index", title = "100m resolution")+
-    theme_cowplot())
+observed <- data$Shannon_index
+fit <- Gamma_shannon_sd_slope_res_100$summary.fitted.values$mean[1:length(observed)]
+pseudo_r2=function(observed,fit){
+  res =  observed-fit
+  RRes=sum((res)^2,na.rm = T)
+  RRtot=sum((observed-mean(fit,na.rm=T))^2,na.rm = T)
+  pseudo_r2_val=1-RRes/RRtot
+  print(RRes)
+  print(RRtot)
+  return(pseudo_r2_val)  
+}
+pr <- round(pseudo_r2(observed, fit), digits = 3)
+qq100 <- ggplot()+  
+  geom_abline(slope=1, intercept=0, col="grey")+
+  geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
+  ylab("")+
+  xlab("")+
+  # coord_cartesian(xlim = c(1, 3.5))+
+  scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
+  scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
+        panel.grid.major.y = element_blank(),panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.margin=margin(t = 1, r = 4, b = 1, l = 1, unit = "pt"), 
+        panel.background = element_rect(fill=NA),
+        text = element_text(size=20))+
+  draw_text(text=paste("pseudo-R2 =", pr), x=1.7, y=3, size=20)
+qq100
 
-res_100_pred <- predict(
-  res_100_glm,
-  newdata = data.frame(slope = seq(0, 15, 0.01)),
-  type = "response"
-)
+-sum(log(Gamma_shannon_sd_slope_res_100$cpo$cpo))
 
-res_100_pred_df <- data.frame(
-  slope = seq(0,15,0.01),
-  Shannon_index = res_100_pred
-)
-res_100_plot_pred <- res_100_plot +
-  geom_line(data = res_100_pred_df, 
-            colour = "blue")
-res_100_plot_pred
+# # glm plotting
+# res_100_glm <- glm(Shannon_index ~ 1+slope, family = Gamma(link="log"), data = data)
+# summary(res_100_glm)
+# plot(res_100_glm)
+# res <- residuals(res_100_glm, type="partial")
+# plot(data$slope, res)
+# plot(fitted(res_100_glm), residuals(res_100_glm, type="pearson"))
+# (res_100_plot <- ggplot(
+#   data,
+#   aes(x = slope, y = Shannon_index)) +
+#     geom_point(shape=21) +
+#     scale_y_continuous(limits = c(1, 4)) +
+#     labs(x = "sd(slope)", y="Shannon index", title = "100m resolution")+
+#     theme_cowplot())
+# 
+# res_100_pred <- predict(
+#   res_100_glm,
+#   newdata = data.frame(slope = seq(0, 15, 0.01)),
+#   type = "response"
+# )
+# 
+# res_100_pred_df <- data.frame(
+#   slope = seq(0,15,0.01),
+#   Shannon_index = res_100_pred
+# )
+# res_100_plot_pred <- res_100_plot +
+#   geom_line(data = res_100_pred_df, 
+#             colour = "blue")
+# res_100_plot_pred
+# 
+# # with coeff variation
+# formula= Shannon_index ~ 1 + slope_CV +
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# Gamma_shannon_slopeCV_res_100 <- inla(formula,     
+#                                        family = "gamma",
+#                                        data = data,
+#                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
+# summary(Gamma_shannon_slopeCV_res_100)
 
-# with coeff variation
-formula= Shannon_index ~ 1 + slope_CV +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_slopeCV_res_100 <- inla(formula,     
-                                       family = "gamma",
-                                       data = data,
-                                       control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-summary(Gamma_shannon_slopeCV_res_100)
-
+# corr <- raster.modified.ttest(Shannon, Slope)
 
 
 # 200m
@@ -1807,41 +2152,71 @@ node = 1:n
 data <- data.frame(Shannon_index = s, slope = sl, node=node)
 data <- data[-c(which(is.na(s))),]
 
-formula= Shannon_index ~ 1 + slope +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_sd_slope_res_200 <- inla(formula,     
-                                    family = "gamma",
-                                    data = data,
-                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-summary(Gamma_shannon_sd_slope_res_200)
-save(Gamma_shannon_sd_slope_res_200, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_200.Rdata")
+# formula= Shannon_index ~ 1 + slope +
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# Gamma_shannon_sd_slope_res_200 <- inla(formula,     
+#                                     family = "gamma",
+#                                     data = data,
+#                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE, config=T), verbose=TRUE)
+# summary(Gamma_shannon_sd_slope_res_200)
+# save(Gamma_shannon_sd_slope_res_200, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_200.Rdata")
 get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_200.Rdata"))
 
-# glm plotting
-res_200_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
-summary(res_200_glm)
-(res_200_plot <- ggplot(
-  data,
-  aes(x = slope, y = Shannon_index)) +
-    geom_point(shape=21) +
-    scale_y_continuous(limits = c(1, 4)) +
-    labs(x = "sd(slope)", y="Shannon index", title = "200m resolution")+
-    theme_cowplot())
-range(data$slope)
-res_200_pred <- predict(
-  res_200_glm,
-  newdata = data.frame(slope = seq(0, 15, 0.01)),
-  type = "response"
-)
+observed <- data$Shannon_index
+fit <- Gamma_shannon_sd_slope_res_200$summary.fitted.values$mean[1:length(observed)]
+pseudo_r2=function(observed,fit){
+  res =  observed-fit
+  RRes=sum((res)^2,na.rm = T)
+  RRtot=sum((observed-mean(fit,na.rm=T))^2,na.rm = T)
+  pseudo_r2_val=1-RRes/RRtot
+  print(RRes)
+  print(RRtot)
+  return(pseudo_r2_val)  
+}
+pr <- round(pseudo_r2(observed, fit), digits = 3)
+qq200 <- ggplot()+  
+  geom_abline(slope=1, intercept=0, col="grey")+
+  geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
+  ylab("")+
+  xlab("")+
+  # coord_cartesian(xlim = c(1, 3.5))+
+  scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
+  scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
+        panel.grid.major.y = element_blank(),panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.margin=margin(t = 1, r = 4, b = 1, l = 1, unit = "pt"), 
+        panel.background = element_rect(fill=NA),
+        text = element_text(size=20))+
+  draw_text(text=paste("pseudo-R2 =", pr), x=1.7, y=3, size=20)
+qq200
 
-res_200_pred_df <- data.frame(
-  slope = seq(0,15,0.01),
-  Shannon_index = res_200_pred
-)
-res_200_plot_pred <- res_200_plot +
-  geom_line(data = res_200_pred_df, 
-            colour = "blue")
-res_200_plot_pred
+-sum(log(Gamma_shannon_sd_slope_res_200$cpo$cpo))
+
+# # glm plotting
+# res_200_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
+# summary(res_200_glm)
+# (res_200_plot <- ggplot(
+#   data,
+#   aes(x = slope, y = Shannon_index)) +
+#     geom_point(shape=21) +
+#     scale_y_continuous(limits = c(1, 4)) +
+#     labs(x = "sd(slope)", y="Shannon index", title = "200m resolution")+
+#     theme_cowplot())
+# range(data$slope)
+# res_200_pred <- predict(
+#   res_200_glm,
+#   newdata = data.frame(slope = seq(0, 15, 0.01)),
+#   type = "response"
+# )
+# 
+# res_200_pred_df <- data.frame(
+#   slope = seq(0,15,0.01),
+#   Shannon_index = res_200_pred
+# )
+# res_200_plot_pred <- res_200_plot +
+#   geom_line(data = res_200_pred_df, 
+#             colour = "blue")
+# res_200_plot_pred
 
 
 
@@ -1863,42 +2238,81 @@ node = 1:n
 data <- data.frame(Shannon_index = s, slope = sl, node=node)
 data <- data[-c(which(is.na(s))),]
 
-formula= Shannon_index ~ 1 + slope +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_sd_slope_res_300 <- inla(formula,     
-                                    family = "gamma",
-                                    data = data,
-                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-summary(Gamma_shannon_sd_slope_res_300)
-save(Gamma_shannon_sd_slope_res_300, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_300.Rdata")
+# formula= Shannon_index ~ 1 + slope +
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# Gamma_shannon_sd_slope_res_300 <- inla(formula,     
+#                                     family = "gamma",
+#                                     data = data,
+#                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE, config=T), verbose=TRUE)
+# formula= Shannon_index ~ 1 + log(slope) +
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# sn_shannon_sd_slope_res_300 <- inla(formula,     
+#                                        family = "sn",
+#                                        data = data,
+#                                        control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE, config=T), verbose=TRUE)
+# summary(sn_shannon_sd_slope_res_300)
+# observed = data$Shannon_index
+# plot_inla_residuals(sn_shannon_sd_slope_res_300, observed = observed)
+
+# summary(Gamma_shannon_sd_slope_res_300)
+# save(Gamma_shannon_sd_slope_res_300, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_300.Rdata")
 get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_300.Rdata"))
 
+observed <- data$Shannon_index
+fit <- Gamma_shannon_sd_slope_res_300$summary.fitted.values$mean[1:length(observed)]
+pseudo_r2=function(observed,fit){
+  res =  observed-fit
+  RRes=sum((res)^2,na.rm = T)
+  RRtot=sum((observed-mean(fit,na.rm=T))^2,na.rm = T)
+  pseudo_r2_val=1-RRes/RRtot
+  print(RRes)
+  print(RRtot)
+  return(pseudo_r2_val)  
+}
+pr <- round(pseudo_r2(observed, fit), digits = 3)
+qq300 <- ggplot()+  
+  geom_abline(slope=1, intercept=0, col="grey")+
+  geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
+  ylab("")+
+  xlab("")+
+  # coord_cartesian(xlim = c(1, 3.5))+
+  scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
+  scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
+        panel.grid.major.y = element_blank(),panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.margin=margin(t = 1, r = 4, b = 1, l = 1, unit = "pt"), 
+        panel.background = element_rect(fill=NA),
+        text = element_text(size=20))+
+  draw_text(text=paste("pseudo-R2 =", pr), x=1.7, y=3, size=20)
+qq300
+-sum(log(Gamma_shannon_sd_slope_res_300$cpo$cpo))
 
-# glm plotting
-res_300_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
-summary(res_300_glm)
-(res_300_plot <- ggplot(
-  data,
-  aes(x = slope, y = Shannon_index)) +
-    geom_point(shape=21) +
-    scale_y_continuous(limits = c(1, 4)) +
-    labs(x = "sd(slope)", y="Shannon index", title = "300m resolution")+
-    theme_cowplot())
-range(data$slope)
-res_300_pred <- predict(
-  res_300_glm,
-  newdata = data.frame(slope = seq(0, 15, 0.01)),
-  type = "response"
-)
-
-res_300_pred_df <- data.frame(
-  slope = seq(0,15,0.01),
-  Shannon_index = res_300_pred
-)
-res_300_plot_pred <- res_300_plot +
-  geom_line(data = res_300_pred_df, 
-            colour = "blue")
-res_300_plot_pred
+ 
+# # glm plotting
+# res_300_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
+# summary(res_300_glm)
+# (res_300_plot <- ggplot(
+#   data,
+#   aes(x = slope, y = Shannon_index)) +
+#     geom_point(shape=21) +
+#     scale_y_continuous(limits = c(1, 4)) +
+#     labs(x = "sd(slope)", y="Shannon index", title = "300m resolution")+
+#     theme_cowplot())
+# range(data$slope)
+# res_300_pred <- predict(
+#   res_300_glm,
+#   newdata = data.frame(slope = seq(0, 15, 0.01)),
+#   type = "response"
+# )
+# 
+# res_300_pred_df <- data.frame(
+#   slope = seq(0,15,0.01),
+#   Shannon_index = res_300_pred
+# )
+# res_300_plot_pred <- res_300_plot +
+#   geom_line(data = res_300_pred_df, 
+#             colour = "blue")
+# res_300_plot_pred
 
 # 500
 Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 50, "PC1278", sep="_"))
@@ -1918,42 +2332,71 @@ node = 1:n
 data <- data.frame(Shannon_index = s, slope = sl, node=node)
 data <- data[-c(which(is.na(s))),]
 
-formula= Shannon_index ~ 1 + slope +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_sd_slope_res_500 <- inla(formula,     
-                                    family = "gamma",
-                                    data = data,
-                                    control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-summary(Gamma_shannon_sd_slope_res_500)
-save(Gamma_shannon_sd_slope_res_500, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_500.Rdata")
+# formula= Shannon_index ~ 1 + slope +
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# Gamma_shannon_sd_slope_res_500 <- inla(formula,     
+#                                     family = "gamma",
+#                                     data = data,
+#                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE, config=T), verbose=TRUE)
+# summary(Gamma_shannon_sd_slope_res_500)
+# save(Gamma_shannon_sd_slope_res_500, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_500.Rdata")
 get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_500.Rdata"))
 
+observed <- data$Shannon_index
+fit <- Gamma_shannon_sd_slope_res_500$summary.fitted.values$mean[1:length(observed)]
+pseudo_r2=function(observed,fit){
+  res =  observed-fit
+  RRes=sum((res)^2,na.rm = T)
+  RRtot=sum((observed-mean(fit,na.rm=T))^2,na.rm = T)
+  pseudo_r2_val=1-RRes/RRtot
+  print(RRes)
+  print(RRtot)
+  return(pseudo_r2_val)  
+}
+pr <- round(pseudo_r2(observed, fit), digits = 3)
+qq500 <- ggplot()+  
+  geom_abline(slope=1, intercept=0, col="grey")+
+  geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
+  ylab("")+
+  xlab("")+
+  # coord_cartesian(xlim = c(1, 3.5))+
+  scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
+  scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
+        panel.grid.major.y = element_blank(),panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.margin=margin(t = 1, r = 4, b = 1, l = 1, unit = "pt"), 
+        panel.background = element_rect(fill=NA),
+        text = element_text(size=20))+
+  draw_text(text=paste("pseudo-R2 =", pr), x=1.7, y=3, size=20)
+qq500
+-sum(log(Gamma_shannon_sd_slope_res_500$cpo$cpo))
 
-# glm plotting
-res_500_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
-summary(res_500_glm)
-(res_500_plot <- ggplot(
-  data,
-  aes(x = slope, y = Shannon_index)) +
-    geom_point(shape=21) +
-    scale_y_continuous(limits = c(1, 4)) +
-    labs(x = "sd(slope)", y="Shannon index", title = "500m resolution")+
-    theme_cowplot())
-range(data$slope)
-res_500_pred <- predict(
-  res_500_glm,
-  newdata = data.frame(slope = seq(0, 15, 0.01)),
-  type = "response"
-)
 
-res_500_pred_df <- data.frame(
-  slope = seq(0,15,0.01),
-  Shannon_index = res_500_pred
-)
-res_500_plot_pred <- res_500_plot +
-  geom_line(data = res_500_pred_df, 
-            colour = "blue")
-res_500_plot_pred
+# # glm plotting
+# res_500_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
+# summary(res_500_glm)
+# (res_500_plot <- ggplot(
+#   data,
+#   aes(x = slope, y = Shannon_index)) +
+#     geom_point(shape=21) +
+#     scale_y_continuous(limits = c(1, 4)) +
+#     labs(x = "sd(slope)", y="Shannon index", title = "500m resolution")+
+#     theme_cowplot())
+# range(data$slope)
+# res_500_pred <- predict(
+#   res_500_glm,
+#   newdata = data.frame(slope = seq(0, 15, 0.01)),
+#   type = "response"
+# )
+# 
+# res_500_pred_df <- data.frame(
+#   slope = seq(0,15,0.01),
+#   Shannon_index = res_500_pred
+# )
+# res_500_plot_pred <- res_500_plot +
+#   geom_line(data = res_500_pred_df, 
+#             colour = "blue")
+# res_500_plot_pred
 
 # 1000m
 Shannon <- rast(paste("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/ALPHA/Shannon", 100, "PC1278", sep="_"))
@@ -1973,41 +2416,84 @@ node = 1:n
 data <- data.frame(Shannon_index = s, slope = sl, node=node)
 data <- data[-c(which(is.na(s))),]
 
-formula= Shannon_index ~ 1 + slope +
-  f(node, model="matern2d", nrow=nrow, ncol=ncol)
-Gamma_shannon_sd_slope_res_1000 <- inla(formula,     
-                                     family = "gamma",
-                                     data = data,
-                                     control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE), verbose=TRUE)
-summary(Gamma_shannon_sd_slope_res_1000)
-save(Gamma_shannon_sd_slope_res_1000, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_1000.Rdata")
+# formula= Shannon_index ~ 1 + slope +
+#   f(node, model="matern2d", nrow=nrow, ncol=ncol)
+# Gamma_shannon_sd_slope_res_1000 <- inla(formula,     
+#                                      family = "gamma",
+#                                      data = data,
+#                                      control.compute = list(cpo = T, dic = T, waic = T,return.marginals.predictor=TRUE, config=T), verbose=TRUE)
+# summary(Gamma_shannon_sd_slope_res_1000)
+# save(Gamma_shannon_sd_slope_res_1000, file="~/data/output/INLA_modelling/Gamma_shannon_sd_slope_res_1000.Rdata")
 get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_1000.Rdata"))
 
-# glm plotting
-res_1000_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
-summary(res_1000_glm)
-(res_1000_plot <- ggplot(
-  data,
-  aes(x = slope, y = Shannon_index)) +
-    geom_point(shape=21) +
-    scale_y_continuous(limits = c(1, 4)) +
-    labs(x = "sd(slope)", y="Shannon index", title = "1000m resolution")+
-    theme_cowplot())
-range(data$slope)
-res_1000_pred <- predict(
-  res_1000_glm,
-  newdata = data.frame(slope = seq(0, 15, 0.01)),
-  type = "response"
-)
+observed <- data$Shannon_index
+fit <- Gamma_shannon_sd_slope_res_1000$summary.fitted.values$mean[1:length(observed)]
+pseudo_r2=function(observed,fit){
+  res =  observed-fit
+  RRes=sum((res)^2,na.rm = T)
+  RRtot=sum((observed-mean(fit,na.rm=T))^2,na.rm = T)
+  pseudo_r2_val=1-RRes/RRtot
+  print(RRes)
+  print(RRtot)
+  return(pseudo_r2_val)  
+}
+pr <- round(pseudo_r2(observed, fit), digits = 3)
+qq1000 <- ggplot()+  
+  geom_abline(slope=1, intercept=0, col="grey")+
+  geom_point(data=data.frame(observed=observed, fit=fit), aes(fit, observed), pch=21)+
+  ylab("")+
+  xlab("")+
+  # coord_cartesian(xlim = c(1, 3.5))+
+  scale_x_continuous(breaks=c(1,2,3), limits =c(1, 3.5))+
+  scale_y_continuous(breaks=c(1,2,3), limits =c(1, 4))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1), 
+        panel.grid.major.y = element_blank(),panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.margin=unit(c(1, 4, 1, 1),"pt"), 
+        panel.background = element_rect(fill=NA),
+        text = element_text(size=20))+
+  draw_text(text=paste("pseudo-R2 =", pr), x=1.7, y=3, size=20)
+qq1000
+-sum(log(Gamma_shannon_sd_slope_res_1000$cpo$cpo))
 
-res_1000_pred_df <- data.frame(
-  slope = seq(0,15,0.01),
-  Shannon_index = res_1000_pred
-)
-res_1000_plot_pred <- res_1000_plot +
-  geom_line(data = res_1000_pred_df, 
-            colour = "blue")
-res_1000_plot_pred
+# # glm plotting
+# res_1000_glm <- glm(Shannon_index ~ slope, family = Gamma(link = "log"), data = data)
+# summary(res_1000_glm)
+# (res_1000_plot <- ggplot(
+#   data,
+#   aes(x = slope, y = Shannon_index)) +
+#     geom_point(shape=21) +
+#     scale_y_continuous(limits = c(1, 4)) +
+#     labs(x = "sd(slope)", y="Shannon index", title = "1000m resolution")+
+#     theme_cowplot())
+# range(data$slope)
+# res_1000_pred <- predict(
+#   res_1000_glm,
+#   newdata = data.frame(slope = seq(0, 15, 0.01)),
+#   type = "response"
+# )
+# 
+# res_1000_pred_df <- data.frame(
+#   slope = seq(0,15,0.01),
+#   Shannon_index = res_1000_pred
+# )
+# res_1000_plot_pred <- res_1000_plot +
+#   geom_line(data = res_1000_pred_df, 
+#             colour = "blue")
+# res_1000_plot_pred
+
+# qqplot plotting together 
+qqplot_sd_slope_together <- plot_grid(qq100, qq200, qq300, qq500, qq1000, align = "v", ncol=1, axis = "r", labels="AUTO", label_size = 25)
+qqplot_sd_slope_together
+save_plot(qqplot_sd_slope_together, filename = "~/data/output/final_plot/qqplot_sd_slope_together.png", base_height = 25, base_width = 10,bg="white")
+
+library(grid)
+library(gridExtra)
+x.grob <- textGrob(paste("Fitted Shannon index from model with", "standard variation of topographic slope as predictor", sep="\n"), gp=gpar(fontsize=25), vjust=0.2, hjust=NULL)
+y.grob <- textGrob("Observe Shannon index", rot=90, gp=gpar(fontsize=25)) 
+qqplot_sd_slope_together_final <- grid.arrange(arrangeGrob(qqplot_sd_slope_together, bottom = x.grob, left = y.grob))
+qqplot_sd_slope_together_final
+save_plot(qqplot_sd_slope_together_final, filename = "~/data/output/final_plot/qqplot_sd_slope_together_final.png", base_height = 25, base_width = 10,bg="white")
+
 
 
 # inla coefficient plotting
@@ -2048,6 +2534,7 @@ sd_slope_plot
 
 plot_grid(sd_topo_plot_trans, sd_slope_plot_trans)
 plot_grid(sd_topo_plot_trans, mean_slope_plot_trans)
+
 
 # glm plotting 
 plot_grid(res_100_plot_pred, res_200_plot_pred, res_300_plot_pred, res_500_plot_pred, res_1000_plot_pred)
@@ -2373,35 +2860,43 @@ get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_300.Rdata"))
 get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_500.Rdata"))
 get(load("~/scratch/INLA_modelling/Gamma_shannon_sd_slope_res_1000.Rdata"))
 
-
 Sd_slope_df <- rbind(Gamma_shannon_sd_slope_res_100$summary.fixed[2,c(1,3,5)],
                      Gamma_shannon_sd_slope_res_200$summary.fixed[2,c(1,3,5)],
                      Gamma_shannon_sd_slope_res_300$summary.fixed[2,c(1,3,5)],
                      Gamma_shannon_sd_slope_res_500$summary.fixed[2,c(1,3,5)],
                      Gamma_shannon_sd_slope_res_1000$summary.fixed[2,c(1,3,5)])
-est <- c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution")
+est <- c("100 m", "200 m", "300 m", "500 m", "1000 m")
 Sd_slope_df <- cbind(as.factor(est), Sd_slope_df)
 colnames(Sd_slope_df)[c(1,3:4)] <- c("resolution","lower", "upper")
 # Sd_slope_df[2:4] <- exp(Sd_slope_df[2:4])
-Sd_slope_df$resolution <- factor(Sd_slope_df$resolution, levels = c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution"))
+Sd_slope_df$resolution <- factor(Sd_slope_df$resolution, levels = c("100 m", "200 m", "300 m", "500 m", "1000 m"))
 sd_slope_plot <- ggplot(data = Sd_slope_df, 
                         aes(x = mean, y = resolution, xmin = lower, xmax = upper)) +
   geom_pointrange(fatten=2.5) +
   labs(
     # title = expression(paste("Model estimate of ", sigma, "(slope) on the estimate Shannon index")),
-    x = "",
+    x = expression(paste("Coefficient estimates of ", sigma, " (slope)")),
     y = ""
     # ,caption = "Models fit with INLA using a log-link function. Error bars show the 95% confidence interval."
     )+
   geom_vline(xintercept = as.numeric(0), col="red", alpha=0.5, lty="dashed")+
   theme_bw() + 
-  theme(panel.border = element_blank(), panel.grid.major.y = element_blank(),
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=0.5),
         panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), axis.text.y = element_text(size=12), axis.text.x = element_text(size=12)
-        # ,panel.grid.major.x = element_blank()
+        ,panel.grid.major.x = element_blank(),  panel.grid.major.y = element_blank(), axis.title.x = element_text(vjust=-2, size=14)
         )
 sd_slope_plot
 
+# LOAD THE GOOD DATA
+ggplot <- data.frame(observed= data$Shannon_index, fitted = Gamma_shannon_sd_slope_res_100$summary.fitted.values$mean[1:length(observed)])
+ggplot_sd_slope_res100 <-  ggplot()+
+  geom_point(data=ggplot, aes(x=fitted, y=observed), shape=21)+
+  geom_abline(intercept = 0, slope = 1)+
+  scale_x_continuous(breaks = c(1,2,3))+
+  theme_cowplot()
+ggplot_sd_slope_res100
 
+##### coeff var 
 get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_100.Rdata"))
 get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_200.Rdata"))
 get(load("~/scratch/INLA_modelling/Gamma_shannon_coeffvar_res_300.Rdata"))
@@ -2413,39 +2908,107 @@ CV_df <- rbind(Gamma_shannon_coeffvar_res_100$summary.fixed[2,c(1,3,5)],
                Gamma_shannon_coeffvar_res_300$summary.fixed[2,c(1,3,5)],
                Gamma_shannon_coeffvar_res_500$summary.fixed[2,c(1,3,5)],
                Gamma_shannon_coeffvar_res_1000$summary.fixed[2,c(1,3,5)])
-est <- c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution")
+est <- c("100 m", "200 m", "300 m", "500 m", "1000 m")
 CV_df <- cbind(as.factor(est), CV_df)
 colnames(CV_df)[c(1,3:4)] <- c("resolution","lower", "upper")
 # Slope_df[,2:4] <- exp(Slope_df[,2:4])
-CV_df$resolution <- factor(CV_df$resolution, levels = c("100m resolution", "200m resolution", "300m resolution", "500m resolution", "1000m resolution"))
+CV_df$resolution <- factor(CV_df$resolution, levels = c("100 m", "200 m", "300 m", "500 m", "1000 m"))
 
 CV_coeff_plot <- ggplot(data = CV_df, 
                         aes(x = mean, y = resolution, xmin = lower, xmax = upper)) +
   geom_pointrange(fatten=2.5) +
   labs(
     # title = "Model Estimates of the coefficient of variation in elevation on Shannon index estimates",
-    x = ""
-    ,y = ""
+    x = expression(paste("Coefficient estimates of ", italic("CV"),"(elevation)")),
+    y = ""
     # ,caption = "Models fit with INLA using a log-link function. Error bars show the 95% confidence interval."
   )+
   geom_vline(xintercept = as.numeric(0), linetype='longdash', col="red", alpha=0.5)+
-  coord_cartesian(xlim = c(-0.025, 0.025))+
+  coord_cartesian(xlim = c(-0.01, 0.045))+
   theme_bw() + 
-  theme(panel.border = element_blank(), panel.grid.major.y = element_blank(), axis.text.y = element_blank(),
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=0.5),  axis.text.y = element_blank(),
         panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), axis.text.x = element_text(size=12) 
-        # ,panel.grid.major.x = element_blank()
+        ,panel.grid.major.x = element_blank(), panel.grid.major.y = element_blank(), axis.title.x = element_text(vjust=-2, size=14)
         )
 CV_coeff_plot
 
 library(grid)
 library(gridExtra)
-plotgrid_sd_slope_CV_ele <- plot_grid(sd_slope_plot, CV_coeff_plot, ncol=2, rel_widths = c(1.25,1))
-x.grob <- textGrob("Coefficient Estimates", gp=gpar(fontsize=14))
+plotgrid_sd_slope_CV_ele <- plot_grid(sd_slope_plot, CV_coeff_plot, ncol=2, rel_widths = c(1.1,1))
+x.grob <- textGrob("")
 y.grob <- textGrob("Resolution", rot=90, gp=gpar(fontsize=14)) 
-final_plot <- grid.arrange(arrangeGrob(plotgrid_sd_slope_CV_ele,bottom = x.grob, left = y.grob))
-save_plot(filename="~/data/output/final_plot/plot_grid_sd_slope_CV_ele.png", final_plot, ncol=2)
+final_plot <- grid.arrange(arrangeGrob(plotgrid_sd_slope_CV_ele, left = y.grob, bottom=x.grob ))
+save_plot(filename="~/data/output/final_plot/plot_grid_sd_slope_CV_ele.png", final_plot, ncol=2, base_height = 4, base_width = 5)
 save_plot(filename="~/data/output/final_plot/plot_grid_sd_slope_CV_ele_with_vgrid.png", final_plot, ncol=2)
 
 
+ggplot <- data.frame(observed= data$Shannon_index, fitted = Gamma_shannon_coeffvar_res_100$summary.fitted.values$mean[1:length(observed)])
+ggplot_CV_res100 <-  ggplot()+
+  geom_point(data=ggplot, aes(x=fitted, y=observed), shape=21)+
+  geom_abline(intercept = 0, slope = 1)+
+  scale_x_continuous(breaks = c(1,2,3))+
+  theme_cowplot()
+ggplot_CV_res100
 
+qqplot_sd_slope_CV <- plot_grid(ggplot_sd_slope_res100, ggplot_CV_res100)
+save_plot(qqplot_sd_slope_CV, filename = "~/data/output/final_plot/qqplot_sd_slope_CVele.png", base_height =4, base_width = 8, bg="white")
+
+#### elevation
+get(load("~/scratch/INLA_modelling/Gamma_shannon_topo_res100.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_topo_res200.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_topo_res300.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_topo_res500.Rdata"))
+get(load("~/scratch/INLA_modelling/Gamma_shannon_topo_res1000.Rdata"))
+Sd_ele_df <- rbind(Gamma_shannon_topo_res100$summary.fixed[2,c(1,3,5)],
+                   Gamma_shannon_topo_res200$summary.fixed[2,c(1,3,5)],
+                   Gamma_shannon_topo_res300$summary.fixed[2,c(1,3,5)],
+                   Gamma_shannon_topo_res500$summary.fixed[2,c(1,3,5)],
+                   Gamma_shannon_topo_res1000$summary.fixed[2,c(1,3,5)])
+est <- c("100 m", "200 m", "300 m", "500 m", "1000 m")
+Sd_ele_df <- cbind(as.factor(est), Sd_ele_df)
+colnames(Sd_ele_df)[c(1,3:4)] <- c("resolution","lower", "upper")
+Sd_ele_df$resolution <- factor(Sd_ele_df$resolution, levels = c("100 m", "200 m", "300 m", "500 m", "1000 m"))
+sd_ele_plot <- ggplot(data = Sd_ele_df, 
+                        aes(x = mean, y = resolution, xmin = lower, xmax = upper)) +
+  geom_pointrange(fatten=2.5) +
+  labs(
+    # title = expression(paste("Model estimate of ", sigma, "(slope) on the estimate Shannon index")),
+    x = "Coefficient estimates of mean elevation",
+    y = "Resolution"
+    # ,caption = "Models fit with INLA using a log-link function. Error bars show the 95% confidence interval."
+  )+
+  geom_vline(xintercept = as.numeric(0), col="red", alpha=0.5, lty="dashed")+
+  theme_bw() + 
+  theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=0.5),
+        panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), axis.text.y = element_text(size=12), axis.text.x = element_text(size=12)
+        ,panel.grid.major.x = element_blank(),  panel.grid.major.y = element_blank(), axis.title.x = element_text(vjust=-2, size=14), axis.title.y = element_text(size=14),
+        plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm")
+  )
+sd_ele_plot
+save_plot(sd_ele_plot, filename="~/data/output/final_plot/coeff_plot_sd_ele_sent.png", base_height = 4, base_width = 5,bg="white")
+save_plot(sd_ele_plot, filename="~/data/output/final_plot/coeff_plot_sd_ele_sent.svg", base_height = 4, bg="white")
+
+
+Elev <- rast(paste("~/data/ArcDEM/ArcDEM_masked_", 10, "_res.tif", sep=""))
+Elev_matrix <- as.matrix(Elev, wide=T)
+Mean_ele <- rast(paste("~/data/ArcDEM/mean_ele_masked_", 10, "_res.tif", sep=""))
+Mean_ele_matrix <- as.matrix(Mean_ele, wide=T)
+e <- inla.matrix2vector(Elev_matrix)
+me <- inla.matrix2vector(Mean_ele_matrix)
+data <- data.frame(topo=e, mean_ele = me)
+data <- data[-c(which(is.na(e))),]
+data$coeff_var <- data$topo/data$mean_ele
+mean_ele_sd_ele <- ggplot(data, aes(x=mean_ele, y=topo))+
+  geom_point(shape=21)+
+  theme_cowplot()+
+  labs(x="Mean elevation", y=expression(paste(sigma, " (elevation)")))+
+  theme(axis.line=element_line(linewidth =0.5), axis.text.y = element_text(size=12), axis.text.x = element_text(size=12),
+        axis.title.x = element_text(vjust=-2,size=14),axis.title.y=element_text(size=14), 
+        panel.border = element_rect(colour = "black", fill=NA, linewidth=0.5), plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm")
+        )
+mean_ele_sd_ele
+save_plot(mean_ele_sd_ele, filename = "~/data/output/final_plot/scatterplot_mean_ele_sd_ele.png", bg="white", base_height = 4, base_asp = 1.4)
+
+plotgrid_sd_ele_scatterplot <- plot_grid(sd_ele_plot, mean_ele_sd_ele, ncol=2, rel_widths = c(1,1))
+save_plot(plotgrid_sd_ele_scatterplot, filename = "~/data/output/final_plot/plotgrid_coeff_sd_ele_scatterplot.png", bg="white", ncol=2, base_height = 4, base_width = 5)
 
