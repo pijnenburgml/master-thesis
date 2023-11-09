@@ -6,8 +6,7 @@ library(terra)
 library(tidyterra)
 library(stars)
 library(raster)
-library(biodivMapR)
-
+library(cowplot)
 ############################
 # area of interest
 ############################
@@ -24,8 +23,8 @@ path <- c("/home/mpijne/data/L2A_T13WDS_A012480_20190727T190134_IMG_DATA/R20m", 
 data_list <- list.files(path=path, recursive = T, full.names = T, pattern="B.._20m.jp2$")
 
 # remove bands that are already at 10m resolution
-
 data_list <- data_list[-grep("B02|B03|B04|B08", data_list)]
+# read band at 20 m and disaggregate
 sent20 <- lapply(1:length(data_list), function(x){rast(data_list[x])})
 sent_disagg <- lapply(1:length(sent20), function(x){disagg(sent20[[x]], fact=2, method="bilinear")})
 # sent20_crop <- lapply(1:length(sent_disagg), function(x){crop(sent_disagg[[x]], area_interest_proj)})
@@ -71,7 +70,7 @@ sent_aoi_stack_crop <- rast("~/data/output/sent_crop_view.tif")
 
 plotRGB(sent_aoi_stack_crop, r=3, g=2, b=1, scale=10000, stretch="lin")
 # why do we have such a different color after cropping 
-plot(area_interest_proj, add=T, col="red")
+plot(area_interest_proj, add=T)
 
 
 #data cleaning 
@@ -213,6 +212,36 @@ sep_poly_vect <- vect(sep_poly_poly) # make a SpatVector object
 crs(sep_poly_vect) <- crs(sent_aoi_stack_crop) 
 plotRGB(sent_aoi_stack_crop, r=3, g=2, b=1, scale=10000, stretch="lin")
 plot(sep_poly_vect, add=T, col="green")
+try <- hatched.SpatialPolygons(sep_poly_poly, density = c(40, 60), angle = c(45, 135))
+sent_aoi_stack_crop_scaled <- sent_aoi_stack_crop/6
+
+
+patternLayer(x=sep_poly_poly, pattern = "right2left", col="red")
+hatched <- patternLayer(x=sep_poly_poly, pattern = "right2left", mode="sfc")
+plotRGB(sent_aoi_stack_crop, r=3, g=2, b=1, scale=10000, stretch="lin")
+plot(area_interest_proj, add=T, col=sf.colors(categorical=T, alpha=0.6))
+plot(hatched, add=T, col="red", lwd=4)
+
+col = sf.colors(categorical = TRUE, alpha = 0.5)
+
+grid <- st_make_grid(sep_poly_poly,
+                     what = "polygons",
+                     square = T
+) %>%
+  st_cast("LINESTRING") %>%
+  st_intersection(sf::st_buffer(sep_poly_poly, dist = 0))
+grid2 <- grid[st_geometry_type(grid) %in% c("LINESTRING", "MULTILINESTRING")]
+plot(st_geometry(sep_poly_poly))
+plot(st_geometry(grid2), col = "red", add = T)
+
+ggplot()+
+  geom_spatraster_rgb(data=sent_aoi_stack_crop_scaled, r=3, g=2, b=1)+
+  geom_sf(data = sep_poly_vect)+
+  # geom_ribbon_pattern(data=area_interest_proj_poly, pattern_color = NA,
+  #                     pattern_fill = "orange",
+  #                     pattern = "stripe")+
+  theme_map()
+
 
 mask_below <- mask(sent_aoi_stack_crop, sep_poly_vect, inverse=F, updatevalue=0)
 plot(mask_below)
