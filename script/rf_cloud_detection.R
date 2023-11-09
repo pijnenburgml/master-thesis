@@ -1,7 +1,6 @@
 library(rgdal)
 library(terra)
 library(caTools)
-# install.packages("randomForest")
 library(randomForest)
 library(dplyr)
 library(devtools)
@@ -11,19 +10,13 @@ library(ggplot2)
 grid_polygons <- st_read("~/data/output/tilling/grid_polygons_aoi.shp")
 grid_polygons
 
-
 #############
 # strip 5049
 #############
-
-# cl_5049 <- rast("~/scratch/data_rf_cloud_mask/strip_5049_clouds")
-# cl_5049_rect <- rectify(cl_5049)
 cl_5049 <- rast("~/scratch/data_rf_cloud_mask/strip_5049_clouds_rect.envi")
 cl_5049_poly <- vect("~/scratch/data_rf_cloud_mask/strip_5049_cloud_polygon.shp")
 cloud_pix_5049 <- terra::extract(cl_5049, cl_5049_poly)
 write.table(cloud_pix_5049, file="~/scratch/data_rf_cloud_mask/strip_5049_cloud_pix")
-# cloud_pix_5049 <- spatSample(cl_5049, size=10, replace=F, na.rm=T)
-# to heavy to run
 cloud_pix_5049 <- read.table("~/scratch/data_rf_cloud_mask/strip_5049_cloud_pix")
 table(is.na(cloud_pix_5049))
 set.seed(5)
@@ -34,7 +27,6 @@ cloud_pix_5049_t["ID",] <- "cl"
 rownames(cloud_pix_5049_t) <- c("ID", 1:425)
 # write.table(cloud_pix_5049_t, file="~/data/output/random_forest_cloud_detection/cloud_pix_5049_t")
 cloud_pix_5049_t <- read.table("~/data/output/random_forest_cloud_detection/cloud_pix_5049_t")
-
 
 cl_5917 <- vect("~/scratch/data_rf_cloud_mask/strip_5917_cloud.shp")
 # strip 5917 not in the aoi
@@ -54,7 +46,6 @@ ggplot(data=grid_polygons) +
   ) +
   geom_sf_label(aes(label=cell_id), cex=0.8)+
   geom_sf(data=cl_0708_sf, aes(fill="red", alpha=0.1))
-
 
 cells <- c()
 for (x in 1:nrow(grid_polygons)) {
@@ -84,7 +75,6 @@ sf::gdal_utils("translate",
                  "-co", "INTERLEAVE=BIL"
                )
 )
-
 
 cloud_0708_data <- rast("~/scratch/reflectance_data/strip_0708_cloud_data")
 cloud_pix_0708 <- terra::extract(cloud_0708_data, cl_0708)
@@ -372,34 +362,4 @@ RF_model <- readRDS("~/data/output/random_forest_cloud_detection/cloud_classifie
 # load("~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData")
 pred_test <- predict(RF_model, newdata = validation_data, type= "class")
 table(pred_test, validation_data$ID)  
-
-# strip_4159_small_RF_rect <- rectify(strip_4159_small_RF)
-# writeRaster(strip_4159_small_RF_rect, filename = "strip_4159_small_RF_rect.envi")
-
-# strip_4159_half1 <- rast("~/scratch/data_rf_cloud_mask/strip_4159_half_1")
-# cloud_pix <- terra::extract(strip_4159_small_RF_rect, clouds)
-# strip_4159_half1 <- rectify(strip_4159_half1)
-# strip_4159_half2<- rast("strip_4159_half_2")
-# strip_4159_half2<- rectify(strip_4159_half2)
-# strip_4159 <- mosaic(strip_4159_half1, strip_4159_half2)
-# writeRaster(strip_4159_small_RF, filename ="strip_4159_small_RF_rect.envi")
-# cloud_pix <- extract(x=strip_4159_small_RF, y=clouds) %>% sample(size=10000, replace=F)
-# bg_pix <- extract(x=strip_4159, y=bg) %>% sample(size=10000, replace=F)
-
-##########################
-# Apply the random forest on another fligth strip 
-##########################
-# 
-# tile_x10y14 <- rast("~/scratch/reflectance_data/x_10_y_14")
-# names(tile_x10y14) <- 1:425
-# x10y14_cloud_class <- terra::predict(tile_x10y14, model=RF_model)
-# plot(x10y14_cloud_class)
-# par(mfrow=c(1,2))
-# plotRGB(tile_x10y14, r=54, g=36, b=20, stretch="lin")
-# plot(x10y14_cloud_class)
-
-
-
-
-
 
