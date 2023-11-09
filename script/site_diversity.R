@@ -46,7 +46,6 @@ Input_Image_File <- file.path(Datadir,NameRaster)
 NameMask <- "mask_sent2_final_NA"
 Input_Mask_File <- file.path(Datadir, NameMask)
 
-
 # location of the directory where shapefiles used for validation are saved
 VectorDir <- "~/data/field_work"
 # list vector data
@@ -63,8 +62,7 @@ Biodiv_Indicators <- diversity_from_plots_ML(Raster_SpectralSpecies = Path_Spect
                                           Plots = Path_Vector,
                                           nbclusters = nbclusters)
 # save(Biodiv_Indicators, file = "~/data/field_work/Biodive_Indicators_sent_20cluster_PC1278.Rdata")
-Biodiv_Indicators <- get(load("~/data/field_work/Biodive_Indicators_sent_20cluster_PC12789.Rdata"))
-
+Biodiv_Indicators <- get(load("~/data/field_work/Biodive_Indicators_sent_20cluster_PC1278.Rdata"))
 Shannon_RS <- c(Biodiv_Indicators$Shannon)[[1]]
 
 Spectral_sp_whole <- rast("~/data/biodivmapR_sent/RESULTS_cluster_20/sent_crop_envi_BIL/SPCA/SpectralSpecies/SpectralSpecies1278")
@@ -108,50 +106,49 @@ terra::plot(Spectral_sp_whole_crop_s1$`Iter 1`, type="classes",col= viridis_colo
 terra::plot(Spectral_sp_whole_crop_s2$`Iter 1`, type="classes",col= viridis_colors)
 terra::plot(Spectral_sp_whole_crop_s3$`Iter 1`, type="classes",col= viridis_colors)
 
-#####
-# comparison between iteration
-#####
-
-# site 1
+# #####
+# # comparison between iteration
+# #####
+# # site 1
 # pdf(file= "~/data/field_work/site_1_sp_sp_iterations_20clusters_PC129.pdf",   # The directory you want to save the file in
 #     width = 15, # The width of the plot in inches
 #     height = 15) # The height of the plot in inches
-
-par(mfrow=c(3,4))
-
-for (x in 1:nlyr(Spectral_sp_whole_crop_s1)) {
-  terra::plot(Spectral_sp_whole_crop_s1[[x]], type="classes", col=viridis_colors, main=paste("site 1 - iteration", x))
-}
-
-dev.off()
-
-# site 2
-pdf(file= "~/data/field_work/site_2_sp_sp_iterations_20clusters_PC129.pdf",   # The directory you want to save the file in
-    width = 15, # The width of the plot in inches
-    height = 15) # The height of the plot in inches
-
-par(mfrow=c(3,4))
-
-
-for (x in 1:nlyr(Spectral_sp_whole_crop_s2)) {
-  terra::plot(Spectral_sp_whole_crop_s2[[x]], type="classes", col=viridis_colors, main=paste("site 2 - iteration", x))
-}
-
-dev.off()
-
-# site 3
-pdf(file= "~/data/field_work/site_3_sp_sp_iterations_20clusters_PC129.pdf",   # The directory you want to save the file in
-    width = 15, # The width of the plot in inches
-    height = 15) # The height of the plot in inches
-
-par(mfrow=c(3,4))
-
-
-for (x in 1:nlyr(Spectral_sp_whole_crop_s3)) {
-  terra::plot(Spectral_sp_whole_crop_s3[[x]], type="classes", col=viridis_colors, main=paste("site 3 - iteration", x))
-}
-
-dev.off()
+# 
+# par(mfrow=c(3,4))
+# 
+# for (x in 1:nlyr(Spectral_sp_whole_crop_s1)) {
+#   terra::plot(Spectral_sp_whole_crop_s1[[x]], type="classes", col=viridis_colors, main=paste("site 1 - iteration", x))
+# }
+# 
+# dev.off()
+# 
+# # site 2
+# pdf(file= "~/data/field_work/site_2_sp_sp_iterations_20clusters_PC129.pdf",   # The directory you want to save the file in
+#     width = 15, # The width of the plot in inches
+#     height = 15) # The height of the plot in inches
+# 
+# par(mfrow=c(3,4))
+# 
+# 
+# for (x in 1:nlyr(Spectral_sp_whole_crop_s2)) {
+#   terra::plot(Spectral_sp_whole_crop_s2[[x]], type="classes", col=viridis_colors, main=paste("site 2 - iteration", x))
+# }
+# 
+# dev.off()
+# 
+# # site 3
+# pdf(file= "~/data/field_work/site_3_sp_sp_iterations_20clusters_PC129.pdf",   # The directory you want to save the file in
+#     width = 15, # The width of the plot in inches
+#     height = 15) # The height of the plot in inches
+# 
+# par(mfrow=c(3,4))
+# 
+# 
+# for (x in 1:nlyr(Spectral_sp_whole_crop_s3)) {
+#   terra::plot(Spectral_sp_whole_crop_s3[[x]], type="classes", col=viridis_colors, main=paste("site 3 - iteration", x))
+# }
+# 
+# dev.off()
 
 library(ggplot2)
 library(tidyterra)
@@ -161,33 +158,62 @@ sentinel_s2_scaled <- sentinel_s2/7
 sentinel_s3_scaled <- sentinel_s3/7
 
 v1 <- ggplot() +
-  geom_spatraster_rgb(data = sentinel_s1_scaled, r=3, g=2, b=1, interpolate=F)
-v2 <- ggplot() +
-  geom_spatraster_rgb(data = sentinel_s2_scaled, r=3, g=2, b=1, interpolate=F)
-v3 <- ggplot() +
-  geom_spatraster_rgb(data = sentinel_s3_scaled, r=3, g=2, b=1, interpolate=F)
+  geom_spatraster_rgb(data = sentinel_s1_scaled, r=3, g=2, b=1, interpolate=F)+
+  geom_sf()+
+  coord_sf(label_axes=c("----"))+
+  theme_cowplot()
 
-plot_grid(v1,v2,v3, align = "h", ncol=3, nrow=1)
+v2 <- ggplot() +
+  geom_spatraster_rgb(data = sentinel_s2_scaled, r=3, g=2, b=1, interpolate=F)+
+  geom_sf()+
+  coord_sf(label_axes=c("----"))+
+  theme_cowplot()
+
+
+v3 <- ggplot() +
+  geom_spatraster_rgb(data = sentinel_s3_scaled, r=3, g=2, b=1, interpolate=F)+
+  geom_sf()+
+  coord_sf(label_axes=c("----"))+
+  theme_cowplot()
+
+
+plot_grid(v1,v2,v3, align = "v", ncol=1, nrow=3)
 
 viridis_colors <- viridis::plasma(20)
 na_col <- grey(0.8, alpha=0.5)
 d1 <- ggplot()+
   geom_spatraster(data=Spectral_sp_whole_crop_s1$`Iter 1`)+
-  # theme(legend.position = "none")+
-  scale_fill_gradientn(colours = c(na_col,viridis_colors), n.breaks=21, guide = "legend")
+  scale_fill_gradientn(colours = c(na_col,viridis_colors), n.breaks=21, guide = "legend")+
+  theme_cowplot()+
+  theme(legend.position = "none")+
+  geom_sf()+
+  coord_sf(label_axes=c("----"))
+
 d2 <- ggplot()+
   geom_spatraster(data=Spectral_sp_whole_crop_s2$`Iter 1`)+
+  theme_cowplot()+
   theme(legend.position = "none")+
-  scale_fill_gradientn(colours = viridis_colors, na.value = na_col, n.breaks=21, guide = "legend")
+  scale_fill_gradientn(colours = viridis_colors, na.value = na_col, n.breaks=21, guide = "legend")+
+  geom_sf()+
+  coord_sf(label_axes=c("----"))
+
+
 d3 <- ggplot()+
   geom_spatraster(data=Spectral_sp_whole_crop_s3$`Iter 1`)+
-  theme(legend.position = "none")+
+  theme_cowplot()+
   # annotate("text", label = "Text No. 1")+
-  scale_fill_gradientn(colours = viridis_colors, na.value = na_col, n.breaks=21, guide = "legend")
+  scale_fill_gradientn(colours = viridis_colors, na.value = na_col, n.breaks=21, guide = "legend")+
+  geom_sf()+
+  coord_sf(label_axes=c("----"))+
+  theme(legend.position = "none"
+        # panel.border = element_rect(colour = "black", fill=NA, linewidth=0.5)
+        # plot.margin=unit(c(0, 0, 0, 0), "cm")
+        )
+  
 
-plot_grid(d1,d2,d3, align = "h", ncol=3, nrow=1)
+plot_grid(d1,d2,d3, align = "v", ncol=1, nrow=3)
 
-plot_grid(v1, v2, v3, d1, d2, d3, ncol=3, nrow = 2, labels=c("Site 1", "Site 2", "Site 3"), rel_widths=c(2))
+plot_grid(v1, v2, v3, d1, d2, d3, ncol=2, nrow = 3,  byrow=F, labels=c("Site 1", "", "Site 2", "","Site 3"))
 
 Biodiv_Indicators$Richness
 Biodiv_Indicators$Shannon
@@ -285,6 +311,8 @@ plot_grid(v1, v2, v3, d1, d2, d3, ncol=3, nrow = 2, labels=c("Site 1", "Site 2",
 
 Biodiv_Indicators$Richness
 Biodiv_Indicators$Shannon
+
+cell <-"x_20_y_8"
 
 
 
