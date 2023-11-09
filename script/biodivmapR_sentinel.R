@@ -84,7 +84,7 @@ nbclusters <- 20
 ## https://jbferet.github.io/biodivMapR/articles/biodivMapR_4.html            ##
 ################################################################################
 print("PERFORM DIMENSIONALITY REDUCTION")
-PCA_Output <- perform_PCA_ML(Input_Image_File = Input_Image_File,
+PCA_Output <- perform_PCA(Input_Image_File = Input_Image_File,
                           Input_Mask_File = Input_Mask_File,
                           Output_Dir = Output_Dir,
                           TypePCA = TypePCA,
