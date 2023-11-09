@@ -36,7 +36,7 @@ target_area <- data.frame(x = c(473557.1, 569724.9, 569724.9, 473557.1), #this i
 #########
 target_area <- data.frame(x = c(476480, 517470, 517470, 476480), #this is the Sentinel-2 outline.
                           y = c(7657730, 7657730,  7687110, 7687110)) %>%
-    st_as_sf(
+  st_as_sf(
     coords = c("x", "y"),
     crs = 32613 # UTM Zone 12 -> so coordiantes are in metres
   ) %>% summarize() %>%
@@ -48,8 +48,8 @@ plot(target_area, add=T, col="red")
 
 # Visualise the polygon to check everything worked
 ggplot() +
-    geom_sf(data = target_area) +
-    theme_map()
+  geom_sf(data = target_area) +
+  theme_map()
 
 # Set grid size (asumming square tiles)
 tile_width <- 1000 # 1 km tiles
@@ -65,46 +65,46 @@ n_cells_y <- ceiling((st_bbox(target_area)["ymax"] - st_bbox(target_area)["ymin"
 
 # wirte a quick helper function to generate a polygon for a tile
 generate_tile_poly <- function(cell_id_x, cell_id_y, grid_origin, tile_width) {
-    # Generate a matrix of five points that form the corners of the polygon 
-    # plus the start corner to make the geometry closed
-    matrix(nrow = 5, ncol = 2, byrow = TRUE,
-    data = c(
-            grid_origin["xmin"] + (cell_id_x - 1) * tile_width, grid_origin["ymin"] + (cell_id_y - 1) * tile_width,
-            grid_origin["xmin"] + (cell_id_x) * tile_width, grid_origin["ymin"] + (cell_id_y - 1) * tile_width,
-            grid_origin["xmin"] + (cell_id_x) * tile_width, grid_origin["ymin"] + (cell_id_y) * tile_width,
-            grid_origin["xmin"] + (cell_id_x - 1) * tile_width, grid_origin["ymin"] + (cell_id_y) * tile_width,
-            grid_origin["xmin"] + (cell_id_x - 1) * tile_width, grid_origin["ymin"] + (cell_id_y - 1) * tile_width)) %>%
-            # Cast into a list
-            list() %>%
-                # Convert to polygon
-                st_polygon() %>%
-                # Convert to sf with a crs
-                st_sfc(crs = 32613) %>%
-                st_sf() %>%
-                # add identifiers to the geometry
-                mutate(
-                    cell_id = paste0("x_", cell_id_x, "_y_", cell_id_y),
-                    cell_id_x = cell_id_x,
-                    cell_id_y = cell_id_y
-                )
+  # Generate a matrix of five points that form the corners of the polygon 
+  # plus the start corner to make the geometry closed
+  matrix(nrow = 5, ncol = 2, byrow = TRUE,
+         data = c(
+           grid_origin["xmin"] + (cell_id_x - 1) * tile_width, grid_origin["ymin"] + (cell_id_y - 1) * tile_width,
+           grid_origin["xmin"] + (cell_id_x) * tile_width, grid_origin["ymin"] + (cell_id_y - 1) * tile_width,
+           grid_origin["xmin"] + (cell_id_x) * tile_width, grid_origin["ymin"] + (cell_id_y) * tile_width,
+           grid_origin["xmin"] + (cell_id_x - 1) * tile_width, grid_origin["ymin"] + (cell_id_y) * tile_width,
+           grid_origin["xmin"] + (cell_id_x - 1) * tile_width, grid_origin["ymin"] + (cell_id_y - 1) * tile_width)) %>%
+    # Cast into a list
+    list() %>%
+    # Convert to polygon
+    st_polygon() %>%
+    # Convert to sf with a crs
+    st_sfc(crs = 32613) %>%
+    st_sf() %>%
+    # add identifiers to the geometry
+    mutate(
+      cell_id = paste0("x_", cell_id_x, "_y_", cell_id_y),
+      cell_id_x = cell_id_x,
+      cell_id_y = cell_id_y
+    )
 }
 
 # Confirm that it works
 ggplot() +
-    geom_sf(data = target_area)+
-    geom_sf(data = generate_tile_poly(1, 1, grid_origin, tile_width),col="red") +
-    theme_map()
+  geom_sf(data = target_area)+
+  geom_sf(data = generate_tile_poly(1, 1, grid_origin, tile_width),col="red") +
+  theme_map()
 
 # Generate polygons for all tiles:
 
 # Use expand.grid to get all combinaton of grid cell ids
 grid_cell_combos <- expand.grid(x = 1:n_cells_x, y = 1:n_cells_y) %>%
-    data.frame()
+  data.frame()
 
 # Use map 2 to apply the helper function
 grid_polygons <- map2(grid_cell_combos$x, grid_cell_combos$y, .f = generate_tile_poly, grid_origin = grid_origin, tile_width = tile_width) %>%
-    # bind list of sfcs into one
-    bind_rows()
+  # bind list of sfcs into one
+  bind_rows()
 
 # Plot to check it worked
 # mask <- rast("~/master-thesis/sent_output/mask_sent2_final.tif")
@@ -115,7 +115,7 @@ ggplot() +
   ) +
   theme_map() +
   theme(legend.position = "none")
-  # +geom_spatraster(data=mask, alpha=0.3)
+# +geom_spatraster(data=mask, alpha=0.3)
 
 #Save the tile boundaries as shapefile 
 # st_write(grid_polygons, "~/data/output/tilling/grid_polygons_aoi.shp")
@@ -164,9 +164,9 @@ names(boundaries_sf) <- boundaries_name
 cat(paste(rep("boundaries_sf[[", 16), 1:16, rep("]]$geometry", 16), sep=""), sep=",")
 # copy-paste output
 boundaries_multipolygon <- c(boundaries_sf[[1]]$geometry, boundaries_sf[[2]]$geometry,boundaries_sf[[3]]$geometry,boundaries_sf[[4]]$geometry,
-  boundaries_sf[[5]]$geometry,boundaries_sf[[6]]$geometry,boundaries_sf[[7]]$geometry,boundaries_sf[[8]]$geometry,
-  boundaries_sf[[9]]$geometry,boundaries_sf[[10]]$geometry,boundaries_sf[[11]]$geometry,boundaries_sf[[12]]$geometry,
-  boundaries_sf[[13]]$geometry,boundaries_sf[[14]]$geometry,boundaries_sf[[15]]$geometry,boundaries_sf[[16]]$geometry)%>% st_cast("MULTIPOLYGON")
+                             boundaries_sf[[5]]$geometry,boundaries_sf[[6]]$geometry,boundaries_sf[[7]]$geometry,boundaries_sf[[8]]$geometry,
+                             boundaries_sf[[9]]$geometry,boundaries_sf[[10]]$geometry,boundaries_sf[[11]]$geometry,boundaries_sf[[12]]$geometry,
+                             boundaries_sf[[13]]$geometry,boundaries_sf[[14]]$geometry,boundaries_sf[[15]]$geometry,boundaries_sf[[16]]$geometry)%>% st_cast("MULTIPOLYGON")
 plot(boundaries_multipolygon)
 names(boundaries_multipolygon) <- boundaries_name
 
@@ -208,28 +208,28 @@ pblapply(grid_polygons$cell_id,
            bbox <- dplyr::filter(grid_polygons, cell_id==cell) %>% st_bbox()
            if (length(file)>0) { #need a loop or an apply
              for (x in paths) {
-             sf::gdal_utils("warp",
-                            source = x, 
-                            destination = paste(x, cell, sep="_"),
-                            options = c(
-                              # outpufile = ENVI file
-                              "-of", "ENVI",
-                              "-t_srs", "epsg:32613",
-                              # target extent (in target crs)
-                              "-te",
-                              bbox[1], # xmin
-                              bbox[2], # ymin
-                              bbox[3], # xmax
-                              bbox[4] # ymax
+               sf::gdal_utils("warp",
+                              source = x, 
+                              destination = paste(x, cell, sep="_"),
+                              options = c(
+                                # outpufile = ENVI file
+                                "-of", "ENVI",
+                                "-t_srs", "epsg:32613",
+                                # target extent (in target crs)
+                                "-te",
+                                bbox[1], # xmin
+                                bbox[2], # ymin
+                                bbox[3], # xmax
+                                bbox[4] # ymax
                               )
-                            ) 
+               ) 
              }
              update_paths <- paste(paths, cell, sep="_") 
              sf::gdal_utils("warp", source = update_paths, destination = paste0("/scratch/mpijne/reflectance_data/", cell),
                             options = c("-of", "ENVI", "-t_srs", "epsg:32613",  "-co", "INTERLEAVE=BIL"))
            }
-          },
-          cl = 4
+         },
+         cl = 4
 )
 
 # check if trial with test file worked: 
@@ -311,8 +311,8 @@ pblapply(s_paths,
            mask <- mosaic(shade_mask, water_mask, cloud_mask, building_mask, fun="min")
            # mask <- ifel(mask==0, NA, 1) #is it necessary?
            writeRaster(mask, filename = paste("/scratch/mpijne/reflectance_data/", cell, "_mask", sep=""),filetype="ENVI", gdal="INTERLEAVE=BSQ", overwrite=T, datatype="INT1U")
-                         },
-          cl = cl # the name of your cluster
+         },
+         cl = cl # the name of your cluster
 )
 
 
@@ -466,19 +466,19 @@ bbox <- st_bbox(ext(boundary_strip_0708_crop))
 plot(bbox)
 
 sf::gdal_utils("warp",
-  source = path, 
-  destination = paste(path, "rect",sep="_"),
-  options = c(
-  # outpufile = ENVI file
-  "-of", "ENVI",
-  "-t_srs", "epsg:32613",
-  # target extent (in target crs)
-  "-te",
-  bbox[1], # xmin
-  bbox[2], # ymin
-  bbox[3], # xmax
-  bbox[4] # ymax
-  )
+               source = path, 
+               destination = paste(path, "rect",sep="_"),
+               options = c(
+                 # outpufile = ENVI file
+                 "-of", "ENVI",
+                 "-t_srs", "epsg:32613",
+                 # target extent (in target crs)
+                 "-te",
+                 bbox[1], # xmin
+                 bbox[2], # ymin
+                 bbox[3], # xmax
+                 bbox[4] # ymax
+               )
 ) 
 
 cell <- "ang20190802t220708_rfl_rect"
@@ -512,7 +512,7 @@ build_area_mask <- rast("~/data/output/build_are_mask.tif")
 temp_rast <- rast(ext(tile), resolution = res(tile))
 build_area_mask_5res <- resample(build_area_mask, temp_rast, method="near")
 building_mask <- crop(build_area_mask_5res, tile)
-mask <- mosaic(shade_mask, water_mask, cloud_mask, fun="min")
+mask <- mosaic(shade_mask, water_mask, cloud_mask, building_mask, fun="min")
 plot(mask)
 mask <- ifel(mask==0, NA, 1) #is it necessary?
 # writeRaster(mask, filename = paste("/scratch/mpijne/reflectance_data/strip_0708_aoi_mask", sep=""),filetype="ENVI", gdal="INTERLEAVE=BSQ", overwrite=T, datatype="INT1U")
@@ -543,12 +543,12 @@ library(pbapply)
 # When working on linux you can use forking and
 # just map in parallel without any extra work
 pblapply(grid_polygons$cell_id,
-    function(cell) {
-        grid_polygons %>%
-            filter(cell_id == cell) %>%
-            st_area()
-    },
-    cl = 2 # the number of cores
+         function(cell) {
+           grid_polygons %>%
+             filter(cell_id == cell) %>%
+             st_area()
+         },
+         cl = 2 # the number of cores
 )
 
 # When working on Windows you have to make a parallel 
@@ -557,8 +557,8 @@ cl <- makeCluster(2)
 
 # then load any libraries you might need on the cluster
 clusterEvalQ(cl, {
-    library(sf)
-    library(dplyr)
+  library(sf)
+  library(dplyr)
 })
 
 # and export any variables you need
@@ -566,12 +566,12 @@ clusterExport(cl, c("grid_polygons"))
 
 # then run things in parallel 
 pblapply(grid_polygons$cell_id,
-    function(cell) {
-        grid_polygons %>%
-            filter(cell_id == cell) %>%
-            st_area()
-    },
-    cl = cl # the name of your cluster
+         function(cell) {
+           grid_polygons %>%
+             filter(cell_id == cell) %>%
+             st_area()
+         },
+         cl = cl # the name of your cluster
 )
 
 # once done you need to free up resouces by stopping 
