@@ -1,0 +1,37 @@
+---
+title: "fieldwork_table"
+output:
+  word_document: default
+  html_document: default
+date: "2023-11-06"
+---
+
+
+```{r, echo=FALSE, message=FALSE}
+library(dplyr)
+library(kableExtra)
+options(kableExtra.auto_format = FALSE)
+library(flextable)
+library(sf)
+library(dplyr)
+library(tidyr)
+data_sp <- read.csv("~/data/field_work/presence_absence_cleaned.csv")
+botanical_obs_certain <- data_sp %>%
+  filter(!grepl("cf", species))
+
+species_list <- sort(unique(botanical_obs_certain$species))
+supp <- as.data.frame(species_list)
+colnames(supp) <- c("species")
+site1 <- botanical_obs_certain %>% filter(site == "Site 1") %>% group_by(species, plot_id) %>% summarise() %>% as.data.frame() %>% group_by(species) %>% count()
+supp1 <- merge(supp, site1, by = "species", all.x = TRUE)
+site2 <- botanical_obs_certain %>% filter(site == "Site 2") %>% group_by(species, plot_id) %>% summarise() %>% as.data.frame() %>% group_by(species) %>% count()
+supp2 <- merge(supp1, site2, by = "species", all.x = TRUE)
+site3 <- botanical_obs_certain %>% filter(site == "Site 3") %>% group_by(species, plot_id) %>% summarise() %>% as.data.frame() %>% group_by(species) %>% count()
+supp3 <- merge(supp2, site3, by = "species", all.x = TRUE)
+colnames(supp3)[2:4] <- c("Site 1", "Site 2", "Site 3")
+supp3 <- supp3 %>%
+  mutate_all(~ifelse(is.na(.), 0, .))
+
+supp3  %>% regulartable() %>% autofit()
+
+```
