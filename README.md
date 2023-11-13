@@ -1,7 +1,7 @@
 # Mapping of plant diversity in the Arctic tundra using a spectral diversity measure based on the spectral species concept
 
 ## Content
-This repository contains all the code to produce the study presented in the master thesis "Mapping of plant diversity in the Arctic tundra using a spectral diversity measure based on the spectral species concept", done in 2023 by Marie-Lou Pijnenburg
+This repository contains all the code to produce the study presented in the master thesis "Mapping of spectral species diversity in the Arctic tundra and its relationship with topographic complexity – a use case of the spectral species concept in biodiversity research and conservation", done in 2023 by Marie-Lou Pijnenburg (marielou.pijnenburg2000@gmail.com)
 
 ## Data
 * The Sentinel-2 data can be download from the open hub from copernicus schihub (https://scihub.copernicus.eu/). The two tile used are S2B_MSIL2A_20190727T185929_N0213_R013_T13WES_20190727T214238.SAFE and S2B_MSIL1C_20190727T185929_N0208_R013_T13WDS_20190727T210028.SAFE
@@ -30,6 +30,9 @@ The data analysis and the production of the plots can be done with the code foun
 * The script semi_variogram_plot contains the code to generates the plot of semi-variogram found in the Supplementary material
 * The script fieldwork_table.Rmd produce the Supplementary Table S1 and require the a dataset "presence_absence_cleaned.csv" that is currently not publicly available but can be obtained via Jakob J. Assmann (jakob.assmann@uzh.ch)
 * The script table_formation.Rmd produce the supplementary tables S2-S5. 
+
+## License
+This work is under the MIT license, which can be found under the text file called "license"
 
 ## Reference
 Miller, C. E., Green, R. O., Thompson, D. R., Thorpe, A. K., Eastwood, M., Mccubbin, I. B., Olson-Duvall, W., Bernas, M., Sarture, C. M., Nolte, S., Rios, L. M., Hernandez, M. A., Bue, B. D., & Lundeen, S. R. (2022). ABoVE: Hyperspectral imagery AVIRIS-NG, Alaskan and Canadian Arctic, 2017-2019 V2. ORNL Distributed Active Archive Center. https://doi.org/10.3334/ORNLDAAC/2009
