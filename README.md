@@ -10,6 +10,7 @@ This repository contains all the code to produce the study presented in the mast
 
 * The elevation data can be found and download from the Arctic Digital Elevation Model (Porter et al., 2023) website https://www.pgc.umn.edu/data/arcticdem. We use mosaic tile at 2 meters resolution, from the version 4.1. The tile IDs are “29_21_1_” and “29_21_2_1”. 
 
+* The files area_of_interest.gpkg, site_boundaries.gpkg and ang20190802t220708_outline_KML.kml can be found in this directory
 
 ## Data analysis
 
