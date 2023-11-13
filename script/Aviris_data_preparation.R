@@ -3,9 +3,9 @@
 ###############
 path <- "/home/mpijne/scratch/reflectance_data/ang20190802t220708_rfl"
 # ang20190802t220708_rfl
-boundary_dir <- "~/data/Aviris_data/boundaries"
-boundaries <- list.files(path=boundary_dir, pattern="KML", full.names = T)
-strip_0708 <- st_read(boundaries[12])
+# boundary_dir <- "~/data/Aviris_data/boundaries"
+# boundaries <- list.files(path=boundary_dir, pattern="KML", full.names = T)
+strip_0708 <- st_read("~/data/Aviris_data/boundaries/ang20190802t220708_outline_KML.kml")
 strip_0708_n <- st_zm(strip_0708[1], drop=T, what="ZM")
 strip_0708_df <- as.data.frame(strip_0708_n) 
 strip_0708_polygon <- as(strip_0708_n, "Spatial")
