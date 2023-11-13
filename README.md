@@ -26,7 +26,9 @@ The data analysis and the production of the plots can be done with the code foun
 * The script scaling_analysis contain the code to get the elevation data as well as the spectral species diversity data derived from Sentinel-2 data at different scales and the code to run the corresponding statistical models. 
 * The script aviris_modelling contains the code to get the elevation data as well as the specral sepcies diversity data derived from the AVIRIS-NG data at different scales and the cade to run the corresponding statistical models. 
 * The script Sentinel2_mapping contains the code to produce the Figure 1 of this project
-* The script semi_variogram_plot contains the code to generates the plot of semi-variogram found in the Supplementary material  
+* The script semi_variogram_plot contains the code to generates the plot of semi-variogram found in the Supplementary material
+* The script fieldwork_table.Rmd produce the Supplementary Table S1 and require the a dataset "presence_absence_cleaned.csv" that is currently not publicly available but can be obtained via Jakob J. Assmann (jakob.assmann@uzh.ch)
+* The script table_formation.Rmd produce the supplementary tables S2-S5. 
 
 ## Reference
 Miller, C. E., Green, R. O., Thompson, D. R., Thorpe, A. K., Eastwood, M., Mccubbin, I. B., Olson-Duvall, W., Bernas, M., Sarture, C. M., Nolte, S., Rios, L. M., Hernandez, M. A., Bue, B. D., & Lundeen, S. R. (2022). ABoVE: Hyperspectral imagery AVIRIS-NG, Alaskan and Canadian Arctic, 2017-2019 V2. ORNL Distributed Active Archive Center. https://doi.org/10.3334/ORNLDAAC/2009
