@@ -1,4 +1,4 @@
-# Mapping of plant diversity in the Arctic tundra using a spectral diversity measure based on the spectral species concept
+# Mapping of spectral species diversity in the Arctic tundra and its relationship with topographic complexity – a use case of the spectral species concept in biodiversity research and conservation
 
 ## Content
 This repository contains all the code to produce the study presented in the master thesis "Mapping of spectral species diversity in the Arctic tundra and its relationship with topographic complexity – a use case of the spectral species concept in biodiversity research and conservation", done in 2023 by Marie-Lou Pijnenburg (marielou.pijnenburg2000@gmail.com)
