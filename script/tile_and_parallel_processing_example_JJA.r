@@ -19,18 +19,6 @@ sent_aoi_stack_crop <- rast("output/sent_crop_view.tif")
 ext_aoi <- ext(area_interest_proj)
 ext_sent <- ext(sent_aoi_stack_crop)
 
-
-#########
-# Target area covering the whole Aviris fligth stripe 
-#########
-target_area <- data.frame(x = c(473557.1, 569724.9, 569724.9, 473557.1), #this is the Sentinel-2 outline.
-                          y = c(7639904, 7639904, 7700841 ,7700841)) %>%
-  st_as_sf(
-    coords = c("x", "y"),
-    crs = 32613 # UTM Zone 12 -> so coordiantes are in metres
-  ) %>% summarize() %>%
-  st_convex_hull()
-
 #########
 # Target area covering the aoi --> Sentinel tile
 #########
@@ -44,7 +32,6 @@ target_area <- data.frame(x = c(476480, 517470, 517470, 476480), #this is the Se
 
 plotRGB(sent_aoi_stack_crop, r=3, g=2, b=1, scale=10000, stretch="lin")
 plot(target_area, add=T, col="red")
-
 
 # Visualise the polygon to check everything worked
 ggplot() +
@@ -171,275 +158,274 @@ plot(boundaries_multipolygon)
 names(boundaries_multipolygon) <- boundaries_name
 
 
-########
-# Try to apply gdal warp to get a piece of flight strip rectified I could run the random forest on
-########
-bbox <- dplyr::filter(grid_polygons, cell_id=="x_35_y_17") %>% st_bbox()
-source_path <-"/scratch/mpijne/reflectance_data/ang20190801t160747_rfl"
-sf::gdal_utils("warp",
-               source = source_path, 
-               destination = paste0(source_path, "_x_35_y_17"),
-               options = c(
-                 # outpufile = ENVI file
-                 "-of", "ENVI",
-                 "-t_srs", "epsg:32613",
-                 # target extent (in target crs)
-                 "-te",
-                 bbox[1], # xmin
-                 bbox[2], # ymin
-                 bbox[3], # xmax
-                 bbox[4] # ymax
-               )
-)
+# ########
+# # Try to apply gdal warp to get a piece of flight strip rectified I could run the random forest on
+# ########
+# bbox <- dplyr::filter(grid_polygons, cell_id=="x_35_y_17") %>% st_bbox()
+# source_path <-"/scratch/mpijne/reflectance_data/ang20190801t160747_rfl"
+# sf::gdal_utils("warp",
+#                source = source_path, 
+#                destination = paste0(source_path, "_x_35_y_17"),
+#                options = c(
+#                  # outpufile = ENVI file
+#                  "-of", "ENVI",
+#                  "-t_srs", "epsg:32613",
+#                  # target extent (in target crs)
+#                  "-te",
+#                  bbox[1], # xmin
+#                  bbox[2], # ymin
+#                  bbox[3], # xmax
+#                  bbox[4] # ymax
+#                )
+# )
 
 
-###############
-# Using everything for parallel processing (on linux)
-###############
-library(pbapply)
-library(parallel)
-cl <- 4 # change with the number of cluster 
-
-# then run things in parallel 
-pblapply(grid_polygons$cell_id,
-         function(cell) {
-           file <- names(boundaries_multipolygon)[which(st_intersects(boundaries_multipolygon, dplyr::filter(grid_polygons, cell_id==cell), sparse = F)==T)]
-           paths <- paste0("/scratch/mpijne/reflectance_data/", substr(file, 0, 18), "_rfl")
-           bbox <- dplyr::filter(grid_polygons, cell_id==cell) %>% st_bbox()
-           if (length(file)>0) { #need a loop or an apply
-             for (x in paths) {
-               sf::gdal_utils("warp",
-                              source = x, 
-                              destination = paste(x, cell, sep="_"),
-                              options = c(
-                                # outpufile = ENVI file
-                                "-of", "ENVI",
-                                "-t_srs", "epsg:32613",
-                                # target extent (in target crs)
-                                "-te",
-                                bbox[1], # xmin
-                                bbox[2], # ymin
-                                bbox[3], # xmax
-                                bbox[4] # ymax
-                              )
-               ) 
-             }
-             update_paths <- paste(paths, cell, sep="_") 
-             sf::gdal_utils("warp", source = update_paths, destination = paste0("/scratch/mpijne/reflectance_data/", cell),
-                            options = c("-of", "ENVI", "-t_srs", "epsg:32613",  "-co", "INTERLEAVE=BIL"))
-           }
-         },
-         cl = 4
-)
-
-# check if trial with test file worked: 
-tile1 <- rast("/scratch/mpijne/reflectance_data/ang20190801t143347_rfl_x_10_y_14")
-tile2 <- rast("/scratch/mpijne/reflectance_data/ang20190801t144718_rfl_x_10_y_14")
-plotRGB(tile1, r=54, g=36, b=20, stretch="lin", colNA="red")
-plotRGB(tile2, r=54, g=36, b=20, stretch="lin", colNA="red")
-tile_x10y14 <- rast("/scratch/mpijne/reflectance_data/x_10_y_14")
-plotRGB(tile_x10y14, r=54, g=36, b=20, stretch="lin")
-
-# comparison with mosaic not possible because different resolution
-# tile_x10y14 <- mosaic(tile1, tile2)
-# writeRaster(tile_x35y17, "/scratch/mpijne/reflectance_data/x_35_y_17_comparison.envi")
-
-#######
-# Masking Aviris data in R
-#######
-
-# Clouds
-RF_model <- randomForest(x=training_data[,2:426], y=training_data$ID)
-pix_class <- terra::predict(object=tile_x10y14, model=RF_model)
-
-# Shade
-strip_4159_crop <- rast("./Aviris_data/strip_4159_cropped_2_rect")
-NIR_idx <- names(strip_4159_crop) %>% grep(pattern="^8")
-NIR_average <- mean(strip_4159_crop[[NIR_idx]])
-hist(NIR_average, breaks=seq(0,0.35, by=0.01))
-# cut hard decision, at 0.1 can make sense but less as well, something like 0.05 could also be justifiable.  
-shade_mask <- ifel(NIR_average<0.05, 0, 1)
-plot(shade_mask)
-# NDWI
-green_idx <- names(strip_4159_crop) %>% grep(pattern="^5")
-green_average <- mean(strip_4159_crop[[green_idx]])
-NDWI <- (green_average-NIR_average)/(green_average+NIR_average)
-plot(NDWI)
-hist(NDWI)
-water_mask <- ifel(NDWI>0.1, 0, 1)
-plot(water_mask)
-par(mfrow=c(1,2))
-plot(shade_mask)
-plot(water_mask)
-plotRGB(strip_4159_crop, r=names(strip_4159_crop)[54], g=names(strip_4159_crop)[36], b=names(strip_4159_crop)[20], stretch="lin")
-
-RF_model <-readRDS("~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData")
-build_area_mask <- rast("~/data/output/build_are_mask.tif")
-sent_aoi_stack_crop <- rast("output/sent_crop_view.tif")
-temp_rast <- rast(ext(sent_aoi_stack_crop), resolution = res(tile))
-build_area_mask_5res <- resample(build_area_mask, temp_rast, method="near")
-
-s_paths <- list.files(path="~/scratch/reflectance_data", pattern="^x_")
-s_paths <- s_paths[-c(grep(s_paths, pattern=".hdr"))]
-s_paths <- s_paths[-c(grep(s_paths, pattern=".aux.xml"))]
-s_paths <- s_paths[-c(grep(s_paths, pattern="mask", ignore.case = T))]
-list.files(path="~/scratch/reflectance_data/", pattern="mask")
-list_mask <- list.files(path="~/scratch/reflectance_data", pattern="mask")
-list_mask <- list_mask[-c(grep(list_mask, pattern=".aux.xml|.hdr|_byte"))]
-list_mask <- str_sub(list_mask, -14, -6)
-grep(s_paths, pattern=paste0(list_mask, collapse = "|"))
-s_paths <- s_paths[-c(which(list_mask %in% s_paths))]
-length(s_paths)
-cl=4
-pblapply(s_paths,
-         function(cell) {
-           print(cell)
-           tile <- rast(file.path("/scratch/mpijne/reflectance_data", cell))
-           NIR_average <- mean(tile[[grep(names(tile), pattern = "^8")]])
-           # hist(NIR_average, breaks=seq(terra::minmax(NIR_average)[1],terra::minmax(NIR_average)[2]+0.05, by=0.01))
-           shade_mask <- ifel(NIR_average<0.05, 0, 1)
-           green_average <- mean(tile[[grep(names(tile), pattern="^5")]])
-           NDWI <- (green_average-NIR_average)/(green_average+NIR_average)
-           water_mask <- ifel(NDWI>0.1, 0, 1)
-           names(tile) <- 1:425
-           cloud_class <- terra::predict(object=tile, model=RF_model, na.rm=T)
-           cloud_mask <- ifel(cloud_class=="cl", 0, 1)
-           build_area_mask <- rast("~/data/output/build_are_mask.tif")
-           temp_rast <- rast(ext(sent_aoi_stack_crop), resolution = res(tile))
-           build_area_mask_5res <- resample(build_area_mask, temp_rast, method="near")
-           building_mask <- crop(build_area_mask_5res, tile)
-           mask <- mosaic(shade_mask, water_mask, cloud_mask, building_mask, fun="min")
-           # mask <- ifel(mask==0, NA, 1) #is it necessary?
-           writeRaster(mask, filename = paste("/scratch/mpijne/reflectance_data/", cell, "_mask", sep=""),filetype="ENVI", gdal="INTERLEAVE=BSQ", overwrite=T, datatype="INT1U")
-         },
-         cl = cl # the name of your cluster
-)
-
-
-
-################
-# creating big aviris file 
-################
-grid_polygons <- st_read("~/data/output/tilling/grid_polygons_aoi.shp")
-s_paths <- list.files(path="~/scratch/reflectance_data", pattern="^x_", full.names = T)
-s_paths <- s_paths[-c(grep(s_paths, pattern=".hdr"))]
-s_paths <- s_paths[-c(grep(s_paths, pattern=".aux.xml"))]
-s_paths <- s_paths[-c(grep(s_paths, pattern="mask", ignore.case = T))]
-length(s_paths)
-# grid_polygons has several polygons in the water for example => without aviris flight strip => less file then 1230
-
-# cat(s_paths,sep="\n", file="~/scratch/reflectance_data/tile_file_list.txt")
-# doesn't work to specify the files as a list in text file.
-
-# create VRT file
-sf::gdal_utils("buildvrt",
-               source = s_paths, 
-               destination = "/home/mpijne/scratch/tiles_VRT.vrt"
-) 
-
-
-sf::gdal_utils("translate",
-               source="/home/mpijne/scratch/tiles_VRT.vrt",
-               destination = "/home/mpijne/scratch/reflectance_data/aviris_aoi_data",
-               options = c(
-                 "-of", "ENVI",
-                 "-co", "INTERLEAVE=BIL"
-               )
-)				
-
-
-#######
-# re-creating part of a flight strip 
-#######
-lab <- str_sub(names(boundaries_multipolygon),15,18)
-site_boundaries <-st_read("~/data/field_work/site_boundaries.gpkg")
-site_boundaries[1,]$site <- "site 1"
-site_1 <- site_boundaries[1,]
-site_1$site <- "Site 1"
-site_2 <- site_boundaries[2,]
-site_3 <- site_boundaries[3,]
-
-
-ggplot(data=boundaries_multipolygon) +
-  geom_sf(
-    # aes(fill = cell_id, alpha=0.1)
-  ) +
-  # geom_sf_label(aes(label=cell_id), cex=0.8)+
-  geom_sf(data=site_boundaries ,aes(fill="red", alpha=0.1))+
-  geom_sf_label(aes(label=lab), cex=1.5)
-
-plot(site_boundaries)
-
-#site 1, flight strip 0708
-
-idx <- c(st_intersects(boundaries_multipolygon$`ang20190802t220708 Outline`, grid_polygons$geometry))
-idx_v <- unlist(idx)
-strip_0708_aoi <- grid_polygons[idx_v,1]
-paths <- paste0("/scratch/mpijne/reflectance_data/", strip_0708_aoi$cell_id)
-sf::gdal_utils("buildvrt",
-               source = paths, 
-               destination = "/home/mpijne/scratch/strip_0708_aoi_VRT.vrt"
-) 
-
-sf::gdal_utils("translate",
-               source="/home/mpijne/scratch/strip_0708_aoi_VRT.vrt",
-               destination = "/home/mpijne/scratch/reflectance_data/strip_0708_aoi",
-               options = c(
-                 "-of", "ENVI",
-                 "-co", "INTERLEAVE=BIL"
-               )
-)
-
-x <- "/home/mpijne/scratch/reflectance_data/strip_0708_aoi"
-bbox <- st_bbox(boundaries_multipolygon$`ang20190802t220708 Outline`)
-sf::gdal_utils("warp",
-               source = x, 
-               destination = paste(x, "crop",sep="_"),
-               options = c(
-                 # outpufile = ENVI file
-                 "-of", "ENVI",
-                 "-t_srs", "epsg:32613",
-                 # target extent (in target crs)
-                 "-te",
-                 bbox[1], # xmin
-                 bbox[2], # ymin
-                 bbox[3], # xmax
-                 bbox[4] # ymax
-               )
-) 
-
-
-cell <- "strip_0708_aoi"
-tile <- rast(file.path("/scratch/mpijne/reflectance_data", cell))
-plotRGB(tile, r=54, g=36, b=20, stretch="lin")
-plot(site_boundaries, add=T)
-RF_model <-readRDS("~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData")
-build_area_mask <- rast("~/data/output/build_are_mask.tif")
-sent_aoi_stack_crop <- rast("output/sent_crop_view.tif")
-temp_rast <- rast(ext(sent_aoi_stack_crop), resolution = res(tile))
-build_area_mask_5res <- resample(build_area_mask, temp_rast, method="near")
-
-NIR_average <- mean(tile[[c(86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105)]])
-hist(NIR_average, breaks=seq(terra::minmax(NIR_average)[1],terra::minmax(NIR_average)[2]+0.05, by=0.01))
-shade_mask <- ifel(NIR_average<0.05, 0, 1)
-green_average <- mean(tile[[c(26, 27, 28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45)]])
-NDWI <- (green_average-NIR_average)/(green_average+NIR_average)
-hist(NDWI)
-water_mask <- ifel(NDWI>0.1, 0, 1)
-names(tile) <- 1:425
-library(randomForest)
-cloud_class <- terra::predict(object=tile, model=RF_model, na.rm=T)
-cloud_mask <- ifel(cloud_class=="cl", 0, 1)
-plot(cloud_mask)
+# ###############
+# # Using everything for parallel processing (on linux)
+# ###############
+# library(pbapply)
+# library(parallel)
+# cl <- 4 # change with the number of cluster 
+# 
+# # then run things in parallel 
+# pblapply(grid_polygons$cell_id,
+#          function(cell) {
+#            file <- names(boundaries_multipolygon)[which(st_intersects(boundaries_multipolygon, dplyr::filter(grid_polygons, cell_id==cell), sparse = F)==T)]
+#            paths <- paste0("/scratch/mpijne/reflectance_data/", substr(file, 0, 18), "_rfl")
+#            bbox <- dplyr::filter(grid_polygons, cell_id==cell) %>% st_bbox()
+#            if (length(file)>0) { #need a loop or an apply
+#              for (x in paths) {
+#                sf::gdal_utils("warp",
+#                               source = x, 
+#                               destination = paste(x, cell, sep="_"),
+#                               options = c(
+#                                 # outpufile = ENVI file
+#                                 "-of", "ENVI",
+#                                 "-t_srs", "epsg:32613",
+#                                 # target extent (in target crs)
+#                                 "-te",
+#                                 bbox[1], # xmin
+#                                 bbox[2], # ymin
+#                                 bbox[3], # xmax
+#                                 bbox[4] # ymax
+#                               )
+#                ) 
+#              }
+#              update_paths <- paste(paths, cell, sep="_") 
+#              sf::gdal_utils("warp", source = update_paths, destination = paste0("/scratch/mpijne/reflectance_data/", cell),
+#                             options = c("-of", "ENVI", "-t_srs", "epsg:32613",  "-co", "INTERLEAVE=BIL"))
+#            }
+#          },
+#          cl = 4
+# )
+# 
+# # check if trial with test file worked: 
+# tile1 <- rast("/scratch/mpijne/reflectance_data/ang20190801t143347_rfl_x_10_y_14")
+# tile2 <- rast("/scratch/mpijne/reflectance_data/ang20190801t144718_rfl_x_10_y_14")
+# plotRGB(tile1, r=54, g=36, b=20, stretch="lin", colNA="red")
+# plotRGB(tile2, r=54, g=36, b=20, stretch="lin", colNA="red")
+# tile_x10y14 <- rast("/scratch/mpijne/reflectance_data/x_10_y_14")
+# plotRGB(tile_x10y14, r=54, g=36, b=20, stretch="lin")
+# 
+# # comparison with mosaic not possible because different resolution
+# # tile_x10y14 <- mosaic(tile1, tile2)
+# # writeRaster(tile_x35y17, "/scratch/mpijne/reflectance_data/x_35_y_17_comparison.envi")
+# 
+# #######
+# # Masking Aviris data in R
+# #######
+# 
+# # Clouds
+# RF_model <- randomForest(x=training_data[,2:426], y=training_data$ID)
+# pix_class <- terra::predict(object=tile_x10y14, model=RF_model)
+# 
+# # Shade
+# strip_4159_crop <- rast("./Aviris_data/strip_4159_cropped_2_rect")
+# NIR_idx <- names(strip_4159_crop) %>% grep(pattern="^8")
+# NIR_average <- mean(strip_4159_crop[[NIR_idx]])
+# hist(NIR_average, breaks=seq(0,0.35, by=0.01))
+# # cut hard decision, at 0.1 can make sense but less as well, something like 0.05 could also be justifiable.  
+# shade_mask <- ifel(NIR_average<0.05, 0, 1)
+# plot(shade_mask)
+# # NDWI
+# green_idx <- names(strip_4159_crop) %>% grep(pattern="^5")
+# green_average <- mean(strip_4159_crop[[green_idx]])
+# NDWI <- (green_average-NIR_average)/(green_average+NIR_average)
+# plot(NDWI)
+# hist(NDWI)
+# water_mask <- ifel(NDWI>0.1, 0, 1)
+# plot(water_mask)
+# par(mfrow=c(1,2))
+# plot(shade_mask)
+# plot(water_mask)
+# plotRGB(strip_4159_crop, r=names(strip_4159_crop)[54], g=names(strip_4159_crop)[36], b=names(strip_4159_crop)[20], stretch="lin")
+# 
+# RF_model <-readRDS("~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData")
 # build_area_mask <- rast("~/data/output/build_are_mask.tif")
+# sent_aoi_stack_crop <- rast("output/sent_crop_view.tif")
 # temp_rast <- rast(ext(sent_aoi_stack_crop), resolution = res(tile))
 # build_area_mask_5res <- resample(build_area_mask, temp_rast, method="near")
-# building_mask <- crop(build_area_mask_5res, tile)
-mask <- mosaic(shade_mask, water_mask, cloud_mask, fun="min")
-plot(mask)
-mask <- ifel(mask==0, NA, 1) #is it necessary?
-writeRaster(mask, filename = paste("/scratch/mpijne/reflectance_data/strip_0708_aoi_mask", sep=""),filetype="ENVI", gdal="INTERLEAVE=BSQ", overwrite=T, datatype="INT1U")
+# 
+# s_paths <- list.files(path="~/scratch/reflectance_data", pattern="^x_")
+# s_paths <- s_paths[-c(grep(s_paths, pattern=".hdr"))]
+# s_paths <- s_paths[-c(grep(s_paths, pattern=".aux.xml"))]
+# s_paths <- s_paths[-c(grep(s_paths, pattern="mask", ignore.case = T))]
+# list.files(path="~/scratch/reflectance_data/", pattern="mask")
+# list_mask <- list.files(path="~/scratch/reflectance_data", pattern="mask")
+# list_mask <- list_mask[-c(grep(list_mask, pattern=".aux.xml|.hdr|_byte"))]
+# list_mask <- str_sub(list_mask, -14, -6)
+# grep(s_paths, pattern=paste0(list_mask, collapse = "|"))
+# s_paths <- s_paths[-c(which(list_mask %in% s_paths))]
+# length(s_paths)
+# cl=4
+# pblapply(s_paths,
+#          function(cell) {
+#            print(cell)
+#            tile <- rast(file.path("/scratch/mpijne/reflectance_data", cell))
+#            NIR_average <- mean(tile[[grep(names(tile), pattern = "^8")]])
+#            # hist(NIR_average, breaks=seq(terra::minmax(NIR_average)[1],terra::minmax(NIR_average)[2]+0.05, by=0.01))
+#            shade_mask <- ifel(NIR_average<0.05, 0, 1)
+#            green_average <- mean(tile[[grep(names(tile), pattern="^5")]])
+#            NDWI <- (green_average-NIR_average)/(green_average+NIR_average)
+#            water_mask <- ifel(NDWI>0.1, 0, 1)
+#            names(tile) <- 1:425
+#            cloud_class <- terra::predict(object=tile, model=RF_model, na.rm=T)
+#            cloud_mask <- ifel(cloud_class=="cl", 0, 1)
+#            build_area_mask <- rast("~/data/output/build_are_mask.tif")
+#            temp_rast <- rast(ext(sent_aoi_stack_crop), resolution = res(tile))
+#            build_area_mask_5res <- resample(build_area_mask, temp_rast, method="near")
+#            building_mask <- crop(build_area_mask_5res, tile)
+#            mask <- mosaic(shade_mask, water_mask, cloud_mask, building_mask, fun="min")
+#            # mask <- ifel(mask==0, NA, 1) #is it necessary?
+#            writeRaster(mask, filename = paste("/scratch/mpijne/reflectance_data/", cell, "_mask", sep=""),filetype="ENVI", gdal="INTERLEAVE=BSQ", overwrite=T, datatype="INT1U")
+#          },
+#          cl = cl # the name of your cluster
+# )
+# 
 
+
+# ################
+# # creating big aviris file 
+# ################
+# grid_polygons <- st_read("~/data/output/tilling/grid_polygons_aoi.shp")
+# s_paths <- list.files(path="~/scratch/reflectance_data", pattern="^x_", full.names = T)
+# s_paths <- s_paths[-c(grep(s_paths, pattern=".hdr"))]
+# s_paths <- s_paths[-c(grep(s_paths, pattern=".aux.xml"))]
+# s_paths <- s_paths[-c(grep(s_paths, pattern="mask", ignore.case = T))]
+# length(s_paths)
+# # grid_polygons has several polygons in the water for example => without aviris flight strip => less file then 1230
+# 
+# # cat(s_paths,sep="\n", file="~/scratch/reflectance_data/tile_file_list.txt")
+# # doesn't work to specify the files as a list in text file.
+# 
+# # create VRT file
+# sf::gdal_utils("buildvrt",
+#                source = s_paths, 
+#                destination = "/home/mpijne/scratch/tiles_VRT.vrt"
+# ) 
+# 
+# 
+# sf::gdal_utils("translate",
+#                source="/home/mpijne/scratch/tiles_VRT.vrt",
+#                destination = "/home/mpijne/scratch/reflectance_data/aviris_aoi_data",
+#                options = c(
+#                  "-of", "ENVI",
+#                  "-co", "INTERLEAVE=BIL"
+#                )
+# )				
+# 
+
+# #######
+# # re-creating part of a flight strip 
+# #######
+# lab <- str_sub(names(boundaries_multipolygon),15,18)
+# site_boundaries <-st_read("~/data/field_work/site_boundaries.gpkg")
+# site_boundaries[1,]$site <- "site 1"
+# site_1 <- site_boundaries[1,]
+# site_1$site <- "Site 1"
+# site_2 <- site_boundaries[2,]
+# site_3 <- site_boundaries[3,]
+# 
+# 
+# ggplot(data=boundaries_multipolygon) +
+#   geom_sf(
+#     # aes(fill = cell_id, alpha=0.1)
+#   ) +
+#   # geom_sf_label(aes(label=cell_id), cex=0.8)+
+#   geom_sf(data=site_boundaries ,aes(fill="red", alpha=0.1))+
+#   geom_sf_label(aes(label=lab), cex=1.5)
+# 
+# plot(site_boundaries)
+# 
+# #site 1, flight strip 0708
+# 
+# idx <- c(st_intersects(boundaries_multipolygon$`ang20190802t220708 Outline`, grid_polygons$geometry))
+# idx_v <- unlist(idx)
+# strip_0708_aoi <- grid_polygons[idx_v,1]
+# paths <- paste0("/scratch/mpijne/reflectance_data/", strip_0708_aoi$cell_id)
+# sf::gdal_utils("buildvrt",
+#                source = paths, 
+#                destination = "/home/mpijne/scratch/strip_0708_aoi_VRT.vrt"
+# ) 
+# 
+# sf::gdal_utils("translate",
+#                source="/home/mpijne/scratch/strip_0708_aoi_VRT.vrt",
+#                destination = "/home/mpijne/scratch/reflectance_data/strip_0708_aoi",
+#                options = c(
+#                  "-of", "ENVI",
+#                  "-co", "INTERLEAVE=BIL"
+#                )
+# )
+# 
+# x <- "/home/mpijne/scratch/reflectance_data/strip_0708_aoi"
+# bbox <- st_bbox(boundaries_multipolygon$`ang20190802t220708 Outline`)
+# sf::gdal_utils("warp",
+#                source = x, 
+#                destination = paste(x, "crop",sep="_"),
+#                options = c(
+#                  # outpufile = ENVI file
+#                  "-of", "ENVI",
+#                  "-t_srs", "epsg:32613",
+#                  # target extent (in target crs)
+#                  "-te",
+#                  bbox[1], # xmin
+#                  bbox[2], # ymin
+#                  bbox[3], # xmax
+#                  bbox[4] # ymax
+#                )
+# ) 
+# 
+# 
+# cell <- "strip_0708_aoi"
+# tile <- rast(file.path("/scratch/mpijne/reflectance_data", cell))
+# plotRGB(tile, r=54, g=36, b=20, stretch="lin")
+# plot(site_boundaries, add=T)
+# RF_model <-readRDS("~/data/output/random_forest_cloud_detection/cloud_classifier_RF.RData")
+# build_area_mask <- rast("~/data/output/build_are_mask.tif")
+# sent_aoi_stack_crop <- rast("output/sent_crop_view.tif")
+# temp_rast <- rast(ext(sent_aoi_stack_crop), resolution = res(tile))
+# build_area_mask_5res <- resample(build_area_mask, temp_rast, method="near")
+# 
+# NIR_average <- mean(tile[[c(86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105)]])
+# hist(NIR_average, breaks=seq(terra::minmax(NIR_average)[1],terra::minmax(NIR_average)[2]+0.05, by=0.01))
+# shade_mask <- ifel(NIR_average<0.05, 0, 1)
+# green_average <- mean(tile[[c(26, 27, 28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45)]])
+# NDWI <- (green_average-NIR_average)/(green_average+NIR_average)
+# hist(NDWI)
+# water_mask <- ifel(NDWI>0.1, 0, 1)
+# names(tile) <- 1:425
+# library(randomForest)
+# cloud_class <- terra::predict(object=tile, model=RF_model, na.rm=T)
+# cloud_mask <- ifel(cloud_class=="cl", 0, 1)
+# plot(cloud_mask)
+# # build_area_mask <- rast("~/data/output/build_are_mask.tif")
+# # temp_rast <- rast(ext(sent_aoi_stack_crop), resolution = res(tile))
+# # build_area_mask_5res <- resample(build_area_mask, temp_rast, method="near")
+# # building_mask <- crop(build_area_mask_5res, tile)
+# mask <- mosaic(shade_mask, water_mask, cloud_mask, fun="min")
+# plot(mask)
+# mask <- ifel(mask==0, NA, 1) #is it necessary?
+# writeRaster(mask, filename = paste("/scratch/mpijne/reflectance_data/strip_0708_aoi_mask", sep=""),filetype="ENVI", gdal="INTERLEAVE=BSQ", overwrite=T, datatype="INT1U")
 
 
 ##############
@@ -447,7 +433,7 @@ writeRaster(mask, filename = paste("/scratch/mpijne/reflectance_data/strip_0708_
 ###############
 path <- "/home/mpijne/scratch/reflectance_data/ang20190802t220708_rfl"
 # ang20190802t220708_rfl
-strip_0708 <- st_read(boundaries[12])
+strip_0708 <- st_read("~/data/Aviris_data/boundaries/ang20190802t220708_outline_KML.kml")
 strip_0708_n <- st_zm(strip_0708[1], drop=T, what="ZM")
 strip_0708_df <- as.data.frame(strip_0708_n) 
 strip_0708_polygon <- as(strip_0708_n, "Spatial")
